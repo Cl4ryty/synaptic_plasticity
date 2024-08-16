@@ -66,8 +66,8 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
                 col_min = max(0, x_index[i] - inhibition_radius)
                 col_max = min(w, x_index[i] + inhibition_radius + 1)
 
-                total[i, c_index[i], row_min:row_max, col_min:col_max] = 0
+                total[i, :, row_min:row_max, col_min:col_max] = 0
         
-        winners= torch.stack(winners, dim=1)
+        winners = torch.stack(winners, dim=1)
 
     return winners
