@@ -23,13 +23,12 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
     early_reward = time_steps * spikes * maximum_potential
 
     total = spike_potentials + early_reward
-
-    # Reshape total_potential to (N, C * h * w, T) for top-k selection
-    total = torch.sum(total, dim=0)
-    print(total.shape)
-    total_potential_flat = total.view(N, C * h * w)
-
+   
     if inhibition_radius == 0: 
+        # Reshape total_potential to (N, C * h * w, T) for top-k selection
+        total = torch.sum(total, dim=0)
+        total_potential_flat = total.view(N, C * h * w)
+
         # Get the top kwta values and indices
         _, topk_indices = torch.topk(total_potential_flat, kwta, dim=1, largest=True, sorted=False)
 
@@ -43,7 +42,12 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
         winners = torch.stack([c_indices, y_indices, x_indices], dim=2)  # Shape: (N, kwta, 3)
     else: 
         winners = []
+
+        total = torch.sum(total, dim=0)
+
         for _ in range(kwta):
+            # Reshape total_potential to (N, C * h * w, T) for top-k selection
+            total_potential_flat = total.view(N, C * h * w)
 
             top_index = torch.argmax(total_potential_flat, dim=1)
 
@@ -55,5 +59,15 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
 
             # Stack the indices to get output shape (N, kwta, 3)
             winners.append(torch.stack([c_index, y_index, x_index], dim=1))  # Shape: (N, kwta, 3)
+
+            for i in range(N):
+                row_min = max(0, y_index[i] - inhibition_radius)
+                row_max = min(h, y_index[i] + inhibition_radius + 1)
+                col_min = max(0, x_index[i] - inhibition_radius)
+                col_max = min(w, x_index[i] + inhibition_radius + 1)
+
+                total[i, c_index[i], row_min:row_max, col_min:col_max] = 0
+        
+        winners= torch.stack(winners, dim=1)
 
     return winners
