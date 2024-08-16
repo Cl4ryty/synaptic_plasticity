@@ -29,19 +29,31 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
     print(total.shape)
     total_potential_flat = total.view(N, C * h * w)
 
-    # Get the top kwta values and indices
-    _, topk_indices = torch.topk(total_potential_flat, kwta, dim=1, largest=True, sorted=False)
-    
-    # Convert flat indices to (C, h, w) coordinates
-    N, _ = total_potential_flat.shape
+    if inhibition_radius == 0: 
+        # Get the top kwta values and indices
+        _, topk_indices = torch.topk(total_potential_flat, kwta, dim=1, largest=True, sorted=False)
 
-    # Convert the flat indices to (C, h, w) coordinates
-    c_indices = (topk_indices // (h * w)).long()  # Channel index
-    rem_indices = topk_indices % (h * w)          # Remaining indices after channel removal
-    y_indices = (rem_indices // w).long()         # Row index
-    x_indices = (rem_indices % w).long()          # Column index
+        # Convert the flat indices to (C, h, w) coordinates
+        c_indices = (topk_indices // (h * w)).long()  # Channel index
+        rem_indices = topk_indices % (h * w)          # Remaining indices after channel removal
+        y_indices = (rem_indices // w).long()         # Row index
+        x_indices = (rem_indices % w).long()          # Column index
 
-    # Stack the indices to get output shape (N, kwta, 3)
-    winners = torch.stack([c_indices, y_indices, x_indices], dim=2)  # Shape: (N, kwta, 3)
+        # Stack the indices to get output shape (N, kwta, 3)
+        winners = torch.stack([c_indices, y_indices, x_indices], dim=2)  # Shape: (N, kwta, 3)
+    else: 
+        winners = []
+        for _ in range(kwta):
+
+            top_index = torch.argmax(total_potential_flat, dim=1)
+
+             # Convert the flat indices to (C, h, w) coordinates
+            c_index = (top_index // (h * w)).long()  # Channel index
+            rem_index = top_index % (h * w)          # Remaining indices after channel removal
+            y_index = (rem_index // w).long()         # Row index
+            x_index = (rem_index % w).long()          # Column index
+
+            # Stack the indices to get output shape (N, kwta, 3)
+            winners.append(torch.stack([c_index, y_index, x_index], dim=1))  # Shape: (N, kwta, 3)
 
     return winners
