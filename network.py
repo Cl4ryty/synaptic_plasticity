@@ -48,7 +48,7 @@ class OneSpikeIF(neuron.BaseNode):
             print("reset spiked", self.spiked.shape)
         spikes = self.surrogate_function(
             (1 - self.spiked) * self.v - self.v_threshold)
-        self.spiked[spikes.nonzero()] = 1
+        self.spiked[spikes != 0] = 1
         return spikes
 
     @staticmethod
@@ -414,5 +414,5 @@ def test():
 
     print(w)
 
-test()
-main()
+# test()
+# main()
