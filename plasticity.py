@@ -139,4 +139,27 @@ class STDP(nn.Module):
                 self.synapse.weight.grad = -dw
         else:
             self.synapse.weight.grad = self.synapse.weight.grad - dw
+
+    def update_learning_rate(self, feature, ap, an):
+        r"""Updates learning rate for a specific feature map.
+
+        Args:
+            feature (int): The target feature.
+            ap (float): LTP rate.
+            an (float): LTD rate.
+        """
+        self.learning_rate[feature][0][0] = ap
+        self.learning_rate[feature][1][0] = an
+
+    def update_all_learning_rate(self, ap, an):
+        r"""Updates learning rates of all the feature maps to a same value.
+
+        Args:
+            ap (float): LTP rate.
+            an (float): LTD rate.
+        """
+        for feature in range(self.synapse.out_channels):
+            self.learning_rate[feature][0][0] = ap
+            self.learning_rate[feature][1][0] = an
+
         
