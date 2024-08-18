@@ -57,22 +57,55 @@ s3_training_iterations = 40000000
 valuation_after_iterations = 60000
 
 
-def save_checkpoint(model, training_layer, epoch, directory='checkpoints'):
+def save_checkpoint(model, epoch, training_layer, directory='checkpoints'):
+    print("epoch", epoch, "tl", training_layer)
     if not os.path.exists(directory):
         os.makedirs(directory)
 
     # Generate a timestamped filename
-    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     filename = f'checkpoint_{timestamp}_epoch_{epoch}.pth'
     filepath = os.path.join(directory, filename)
 
-    checkpoint = {
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'training_layer': training_layer,
-    }
-    torch.save(checkpoint, filename)
-    print(f"Checkpoint saved at epoch {epoch}, training layer  {training_layer}.")
+    checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(),
+            'training_layer': training_layer, }
+    torch.save(checkpoint, filepath)
+    print(
+        f"Checkpoint saved at epoch {epoch}, training layer {training_layer}.")
+
+def load_checkpoint(model, filename):
+    if os.path.isfile(filename):
+        checkpoint = torch.load(filename)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        epoch = checkpoint['epoch'] + 1  # start from the next epoch after the saved one
+        training_layer = checkpoint['training_layer']
+        print(f"Checkpoint loaded: epoch {epoch}, training layer {training_layer}.")
+        return epoch, training_layer
+    else:
+        print(f"No checkpoint found at '{filename}'")
+        return 0, 1  # Resume from epoch 0 if no checkpoint is found
+
+def get_latest_checkpoint(directory):
+    if not os.path.exists(directory):
+        return None
+
+    # List all files in the directory
+    files = os.listdir(directory)
+
+    # Filter out files that match the checkpoint filename pattern
+    checkpoint_files = [file for file in files if file.startswith('checkpoint_') and file.endswith('.pth')]
+
+    if not checkpoint_files:
+        print("No checkpoint files found.")
+        return None
+
+    # Sort the checkpoint files by the timestamp in their filenames
+    checkpoint_files.sort(key=lambda x: datetime.datetime.strptime(x.split('_')[1], '%Y%m%d-%H%M%S'))
+
+    # Return the latest checkpoint file (the last one in the sorted list)
+    latest_checkpoint = checkpoint_files[-1]
+    print(f"Latest checkpoint found: {latest_checkpoint}")
+    return os.path.join(directory, latest_checkpoint)
 
 def main():
     # load MNIST dataset, filter with DoG filters and perform intensity to latency encoding
@@ -125,22 +158,42 @@ def main():
     app_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * app
     anp_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * anp
 
-    
-    # [TODO] check if there are files to load the weights from
-    
-    # training = [(s1_training_epochs, 1),(s2_training_epochs, 2),(s3_training_epochs, 3)]
-    training = [(s3_training_epochs, 3)]
+    # check if there are files to load the weights from
+    checkpoint_dir = 'checkpoints'
+    latest_checkpoint_path = get_latest_checkpoint(checkpoint_dir)
+    if latest_checkpoint_path:
+        # Load the checkpoint if found
+        start_epoch, training_layer = load_checkpoint(net,
+                                                      latest_checkpoint_path)
+
+    else:
+        # Start from scratch if no checkpoint is found
+        start_epoch = 0
+        training_layer = 1
+
+    training = [[[0, s1_training_epochs], 1], [[0, s2_training_epochs], 2],
+                [[0, s3_training_epochs], 3]]
+
+
+    training = training[training_layer-1:]
+    print("training", training, training_layer)
+    if start_epoch != 0:
+        training[0][0][
+            0] = start_epoch
+        print("training changed start", training, training_layer)
+
     # Initialize TensorBoard writer
-    writer = SummaryWriter('runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
-    
-    for epochs, training_layer in training:
+    writer = SummaryWriter(
+        'runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
+
+    for [start_epoch, end_epoch], training_layer in training:
         if training_layer == 3:
             running_correct = 0
             running_incorrect = 0
             running_no_spikes = 0
             batch_count = 0
 
-        for epoch in range(epochs):
+        for epoch in range(start_epoch, end_epoch+1):
             # train
             perf = torch.tensor([0,0,0]) # correct, wrong, silence
             for batch, (frame, label) in enumerate(train_loader):
@@ -218,6 +271,7 @@ def main():
                 # net.anti_stdp3.reset()
 
             print(f"epoch: {epoch}, training_layer: {training_layer}")
+            save_checkpoint(net, epoch, training_layer, directory='checkpoints')
 
             # save training accuracies
             if training_layer == 3:
@@ -268,15 +322,13 @@ def main():
                 total = correct+incorrect+no_spikes
                 print("Validation at epoch", epoch, "correct", correct/total, "incorrect", incorrect/total, "no_spikes", no_spikes/total)
 
-            save_checkpoint(model = net, training_layer=training_layer, epoch=epoch, directory="/Users/tkapferer/CognitiveScienceMaster/SoSe24/ModellingOfSynapticPlasticity/project/synaptic_plasticity/models")
+                # Log the results to TensorBoard
+                writer.add_scalar('Valuation correct percentage', correct/total, epoch)
+                writer.add_scalar('Valuation incorrect percentage', incorrect/total, epoch)
+                writer.add_scalar('Valuation no spikes percentage', no_spikes/total, epoch)
 
-    #             # Log the results to TensorBoard
-    #             writer.add_scalar('Valuation correct percentage', correct/total, epoch)
-    #             writer.add_scalar('Valuation incorrect percentage', incorrect/total, epoch)
-    #             writer.add_scalar('Valuation no spikes percentage', no_spikes/total, epoch)
-
-    # # Close the tensorboard writer
-    # writer.close()
+    # Close the tensorboard writer
+    writer.close()
 
 
 
