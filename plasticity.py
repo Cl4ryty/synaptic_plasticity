@@ -70,17 +70,35 @@ class CustomSTDPLearner(base.MemoryModule):
         for _ in range(length): # for all layers watched by this learner
             spikes_pre = self.in_spike_monitor.records.pop(0)
             spikes_post = self.out_spike_monitor.records.pop(0)
+
+            print(torch.flatten(weights).shape)
+            print(torch.flatten(spikes_post).shape)
+            print("weight shape", weights.shape, self.synapse.weight.shape)
             print("pre", spikes_pre.shape,"post", spikes_post.shape)
+
+            for h in range(conv.weight.shape[2]):
+                for w in range(conv.weight.shape[3]):
+                    h_end = in_spike.shape[2] - conv.weight.shape[2] + 1 + h
+                    w_end = in_spike.shape[3] - conv.weight.shape[3] + 1 + w
+
+                    # construct pre- and post spike tensors for all weights
+                    # construct
+
+                    pre_spike = in_spike[:, :, h:h_end:stride_h,
+                                w:w_end:stride_w]  # shape = [batch_size, C_in, h_out, w_out]
+                    post_spike = out_spike  # shape = [batch_size, C_out, h_out, h_out]
+                    weight = conv.weight.data[:, :, h,
+                             w]  # shape = [batch_size_out, C_in]
 
             # if eligible neurons is none all neurons are updated, otherwise only those specified are
             if eligible_neurons is None:
                 eligible_neurons = torch.ones(spikes_post.shape[1:])
 
-            eligible_neurons = torch.zeros(spikes_post.shape[1:]) #[TODO] remove this line after testing
+            # eligible_neurons = torch.ones(spikes_post.shape[1:]) #[TODO] remove this line after testing
             #
 
-            # pre_before_post = self.get_spike_order(spikes_pre, spikes_post)
-            pre_before_post = torch.ones(spikes_post.shape[1:])
+            pre_before_post = self.get_spike_order(spikes_pre, spikes_post)
+            # pre_before_post = torch.ones(spikes_post.shape[1:])
             print("pre_before_post", pre_before_post.shape)
             delta_pre = self.alpha * self.phi_r * self.ar_p + self.beta * self.phi_p * self.ap_n
             delta_post = self.alpha * self.phi_r * self.ar_n + self.beta * self.phi_p * self.ap_p
@@ -94,34 +112,46 @@ class CustomSTDPLearner(base.MemoryModule):
 
             # from the eligible neurons get the feature maps for which weights have to be updated
             # if a neuron is eligible for plasticity all weights in the corresponding feature map are updated
+            # [TODO] rename into something more intuitive
             feature_maps = torch.sum(torch.sum(weight_updates, dim=-1), dim=-1) # sum along all dimensions except the feature map one
             print("feature maps", feature_maps.shape, feature_maps)
             print("weights shape", weights.shape)
-            delta_w = weights
+            feature_maps = feature_maps.unsqueeze(2).unsqueeze(3).unsqueeze(4)
+            print("feature maps", feature_maps.shape, feature_maps)
 
-            # [TODO] fix weight updates - each eligible neuron should result in updating the corresponding weights, have to figure out how these map though to get the shapes right
+            delta_ws = []
 
-            # multiply with stabilizer term
-            if self.use_stabilizer:
-                delta_w = (weights - self.lower_weight_limit)*(self.upper_weight_limit - weights)
+            for feature_map in feature_maps: # iterate through batches
+                print("feature map", feature_map.shape, feature_map)
+                # mask so that only the winners are updated
+                delta_w = torch.ones_like(weights) * feature_map
+                print("delta_w", delta_w.shape, delta_w)
+                print("w", (weights - self.lower_weight_limit)*(self.upper_weight_limit - weights))
 
-            if self.perform_weight_clipping:
-                delta_w = torch.clamp(delta_w,
-                                             min=self.lower_weight_limit,
-                                             max=self.upper_weight_limit)
+                # [TODO] fix weight updates - each eligible neuron should result in updating the corresponding weights, have to figure out how these map though to get the shapes right
+
+                # multiply with stabilizer term
+                if self.use_stabilizer:
+                    delta_w *= (weights - self.lower_weight_limit)*(self.upper_weight_limit - weights)
+
+                if self.perform_weight_clipping:
+                    delta_w = torch.clamp(delta_w,
+                                                 min=self.lower_weight_limit,
+                                                 max=self.upper_weight_limit)
+
+                delta_ws.append(delta_w)
+                print("delta_w", delta_w.shape, delta_w)
 
 
-
-            # mask so that only the winners are updated
-            delta_w = torch.where(eligible_neurons, weight_updates, 0.0)
 
         if on_grad:
-            if self.synapse.weight.grad is None:
-                self.synapse.weight.grad = -delta_w
-            else:
-                self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+            for delta_w in delta_ws:
+                if self.synapse.weight.grad is None:
+                    self.synapse.weight.grad = -delta_w
+                else:
+                    self.synapse.weight.grad = self.synapse.weight.grad - delta_w
         else:
-            return delta_w
+            return delta_ws
 
     def step_rstdp(self, rewards, batch_hits, batch_misses, batch_size, on_grad: bool = True, eligible_neurons=None):
         # rewards should be a tensor of the same shapes the number of neurons, acceptable values are -1, 1, and 0 (reward, punishment, and neutral)
@@ -142,6 +172,13 @@ class CustomSTDPLearner(base.MemoryModule):
             self.step(on_grad, eligible_neurons)
         else:
             return self.step(on_grad, eligible_neurons)
+
+    def scale_learning_rates(self, scale_factor, ar_p_cutoff):
+        if self.ar_p < ar_p_cutoff:
+            self.ar_n *= scale_factor
+            self.ap_n *= scale_factor
+            self.ar_p *= scale_factor
+            self.ap_p *= scale_factor
 
 
 def get_k_winners(spikes, potentials, k, r):

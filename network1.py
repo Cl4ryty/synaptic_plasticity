@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 from neuron import OneSpikeIF
 from spikingjelly.activation_based import layer, surrogate
@@ -6,8 +7,10 @@ from spikingjelly.activation_based import layer, surrogate
 
 
 class Network(nn.Module):
-    def __init__(self):
+    def __init__(self, number_of_classes=None):
         super(Network, self).__init__()
+        self.number_of_classes = number_of_classes
+        self.class_labels = None
         self.net = nn.Sequential(
             # use convolution layer from spikingjelly because it is already
             # wrapped to support both step modes and works better when saving models
@@ -34,11 +37,7 @@ class Network(nn.Module):
             OneSpikeIF(v_threshold=float('inf'),
                        surrogate_function=surrogate.ATan(), store_v_seq=True),
             # C3 - global pooling, neurons are preassigned to a digit
-            # potential-based
-            # layer.MaxPool2d(kernel_size=5, stride=0),
-            # [TODO] max pooling probably doesn't work here out of the box
-            # (because neurons don't spike and we want to pool the internal potential)
-            #  → can use get_k_winners instead, just like in the SpykeTorch code
+            # potential-based → this is done using the get decision function
         )
         # initialize conv weights
         def custom_weights_init(m):
@@ -68,3 +67,35 @@ class Network(nn.Module):
                 self.s3_spikes = x
 
         return x
+
+    def get_decision(self, number_of_classes=None):
+        if number_of_classes is None and self.number_of_classes is None:
+            raise ValueError("Need to specify number of classes")
+
+        if number_of_classes is not None:
+            self.number_of_classes = number_of_classes
+
+        if self.class_labels is None or self.class_labels.shape != self.net[-1].v[0].shape:
+            to_repeat = torch.flatten(
+                    self.net[-1].v[0]).__len__() // number_of_classes
+            self.class_labels = torch.reshape(
+                torch.repeat(torch.arange(number_of_classes), to_repeat),
+                self.net[-1].v[0].shape)
+
+        # get the number of output neurons
+        # assign neurons to classes
+        number_of_batches = self.net[-1].v.shape[0]
+
+
+        decisions = torch.ones(number_of_batches) * -1 # return -1 if the network didn't spike and the maximum potential is 0
+
+        # [TODO] see if this can be done more efficiently without a for loop through clever indexing
+        # do this for each batch
+        for batch in range(number_of_batches):
+            max_potential, max_index = torch.max(self.net[-1].v[batch])
+            if max_potential > 0.0:
+                decisions[batch] = self.class_labels[max_index]
+
+        return decisions
+
+
