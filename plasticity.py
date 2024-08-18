@@ -10,7 +10,7 @@ torch.manual_seed(0)
 
 def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
 
-    # todo: inhibition_radius is missing 
+    # todo: check what happens if not enough winners 
 
     T, N, C, h, w = spikes.shape
 
@@ -71,3 +71,72 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
         winners = torch.stack(winners, dim=1)
 
     return winners
+
+class STDP(nn.Module):
+    def __init__(self, synapse, learning_rate, use_stabilizer = True, lower_bound = 0, upper_bound = 1):
+        super(STDP, self).__init__()
+        self.synapse = synapse
+        if isinstance(learning_rate, list):
+            self.learning_rate = learning_rate
+        else:
+            self.learning_rate = [learning_rate] * synapse.out_channels
+        for i in range(synapse.out_channels):
+            self.learning_rate[i] = (Parameter(torch.tensor([self.learning_rate[i][0]])),
+                            Parameter(torch.tensor([self.learning_rate[i][1]])))
+            self.register_parameter('ltp_' + str(i), self.learning_rate[i][0])
+            self.register_parameter('ltd_' + str(i), self.learning_rate[i][1])
+            self.learning_rate[i][0].requires_grad_(False)
+            self.learning_rate[i][1].requires_grad_(False)
+        self.use_stabilizer = use_stabilizer
+        self.lower_bound = lower_bound
+        self.upper_bound = upper_bound
+
+    def get_spike_order(self, spikes_pre, spikes_post, winners):
+
+        # get the dimensionality of spikes_pre and spikes_post
+        T, N_pre, C_pre, h_pre, w_pre = spikes_pre.shape
+        _, N_post, C_post, h_post, w_post = spikes_post.shape
+
+        # create tensors with same dimensionality but entries are T to 0 (early spikes have higher value)
+        pre_times = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_pre, C_pre, h_pre, w_pre) * spikes_pre
+        post_times = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_post, C_post, h_post, w_post) * spikes_post
+
+        # reduce time dimensionality
+        pre_times = torch.sum(pre_times, dim=0)
+        post_times = torch.sum(post_times, dim=0)
+
+        result = torch.zeros((winners.size(0), winners.size(1), C_pre, self.synapse.kernel_size[0], self.synapse.kernel_size[1]), dtype=torch.bool, device=spikes_pre.device)
+        for i in range(winners.size(0)):
+            for j in range(winners.size(1)):
+                winner = winners[i, j]
+
+                input_tensor = pre_times[i, :, winner[-2]:winner[-2]+self.synapse.kernel_size[0], 
+                                         winner[-1]:winner[-1]+self.synapse.kernel_size[1]]
+                output_tensor = torch.ones(*self.synapse.kernel_size) * post_times[i, winner[0], winner[1], winner[2]]
+
+                result[i, j] = torch.ge(input_tensor, output_tensor)
+        
+        return result # return shape=[N, kwth, C_pre, kernel_width, kernel_height]
+    
+    def forward(self, spikes_pre, spikes_post, potentials, winners=None, kwta=1, inhibition_radius=0):
+        if winners is None:
+            winners = get_k_winners(potentials=potentials, spikes=spikes_post, kwta=kwta, inhibition_radius=inhibition_radius)
+        
+        pairings = self.get_spike_order(spikes_pre=spikes_pre, spikes_post=spikes_post, winners=winners)
+
+        
+        dw = torch.zeros_like(self.synapse.weight)
+        for i in range(winners.size(0)):
+            lr = torch.zeros_like(self.synapse.weight)
+            for j in range(winners.size(1)):
+                feature_map = winners[i][j][0]
+                lr[feature_map] = torch.where(pairings[i][j], *(self.learning_rate[feature_map]))
+
+            dw += lr * ((self.synapse.weight-self.lower_bound) * (self.upper_bound-self.synapse.weight) if self.use_stabilizer else 1)
+
+        # todo: if on_grad: like in spikingjelly stdp learner
+        if self.synapse.weight.grad is None:
+                self.synapse.weight.grad = -dw
+        else:
+            self.synapse.weight.grad = self.synapse.weight.grad - dw
+        
