@@ -266,6 +266,10 @@ def main():
                         batch_count += 1
 
                     optimizer.step()
+                    # TODO: lower_bound and upper_bound in STDP not actually used yet
+                    net.conv1.weight.data.clamp_(0, 1)
+                    net.conv2.weight.data.clamp_(0, 1)
+                    net.conv3.weight.data.clamp_(0.2, 0.8)
                     # reset the network and the learners after each batch
                     functional.reset_net(net)
                     # net.stdp1.reset()
