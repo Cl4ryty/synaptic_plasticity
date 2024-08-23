@@ -94,4 +94,8 @@ class Network(nn.Module):
         n3_out = self.neuron3(c3_out)
         potential3 = self.neuron3.v
 
+        # TODO: check if correct/ check if efficient
+        last_time_step = potential3.sign()
+        n3_out[-1,:] = last_time_step
+
         return c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3

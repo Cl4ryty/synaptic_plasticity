@@ -50,8 +50,8 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
             total_potential_flat = total.view(N, C * h * w)
 
             top_index = torch.argmax(total_potential_flat, dim=1)
-
-             # Convert the flat indices to (C, h, w) coordinates
+        
+            # Convert the flat indices to (C, h, w) coordinates
             c_index = (top_index // (h * w)).long()  # Channel index
             rem_index = top_index % (h * w)          # Remaining indices after channel removal
             y_index = (rem_index // w).long()         # Row index
@@ -105,6 +105,9 @@ class STDP(nn.Module):
         pre_times = torch.sum(pre_times, dim=0)
         post_times = torch.sum(post_times, dim=0)
 
+        # print("pre ", pre_times[0,0])
+        # print("post ", post_times[0,0])
+
         result = torch.zeros((winners.size(0), winners.size(1), C_pre, self.synapse.kernel_size[0], self.synapse.kernel_size[1]), dtype=torch.bool, device=spikes_pre.device)
         for i in range(winners.size(0)):
             for j in range(winners.size(1)):
@@ -122,23 +125,33 @@ class STDP(nn.Module):
         if winners is None:
             winners = get_k_winners(potentials=potentials, spikes=spikes_post, kwta=kwta, inhibition_radius=inhibition_radius)
         
+        
         pairings = self.get_spike_order(spikes_pre=spikes_pre, spikes_post=spikes_post, winners=winners)
+
+        # print(pairings[0,0,0])
 
         
         dw = torch.zeros_like(self.synapse.weight)
-        for i in range(winners.size(0)):
+        for i in range(winners.size(0)): # batch
             lr = torch.zeros_like(self.synapse.weight)
-            for j in range(winners.size(1)):
-                feature_map = winners[i][j][0]
-                lr[feature_map] = torch.where(pairings[i][j], *(self.learning_rate[feature_map]))
-
+            for j in range(winners.size(1)): # kwta
+                if potentials[i, winners[i,j,0], winners[i,j,1], winners[i,j,2]] > 0:
+                    feature_map = winners[i][j][0]
+                    lr[feature_map] = torch.where(pairings[i][j], *(self.learning_rate[feature_map]))
+            
             dw += lr * ((self.synapse.weight-self.lower_bound) * (self.upper_bound-self.synapse.weight) if self.use_stabilizer else 1)
+            # print(dw.shape)
+            # print(dw[0,0])
 
         # todo: if on_grad: like in spikingjelly stdp learner
         if self.synapse.weight.grad is None:
                 self.synapse.weight.grad = -dw
         else:
             self.synapse.weight.grad = self.synapse.weight.grad - dw
+
+        # print(dw[0,0])
+
+        
 
     def update_learning_rate(self, feature, ap, an):
         r"""Updates learning rate for a specific feature map.

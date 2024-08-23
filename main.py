@@ -11,42 +11,133 @@ from plasticity import get_k_winners, STDP
 import numpy as np
 import os
 import datetime
+import utils
 
 
-class SpikeTransform:
-    def __init__(self, timesteps=15):
-        self.temporal_transform = encoding.LatencyEncoder(timesteps)
-        self.count = 0
-        self.timesteps = timesteps
+# class SpikeTransform:
+#     def __init__(self, timesteps=15):
+#         self.temporal_transform = encoding.LatencyEncoder(timesteps)
+#         self.count = 0
+#         self.timesteps = timesteps
+
+#     def __call__(self, image):
+#         image = torch.as_tensor(image).squeeze().numpy()
+#         b1 = cv2.GaussianBlur(image,ksize=(3,3),sigmaX=3/9,sigmaY=6/9)
+#         b2 = cv2.GaussianBlur(image,ksize=(3,3),sigmaX=6/9,sigmaY=3/9)
+#         image1 = b1 - b2
+#         image2 = b2 - b1
+
+#         b3 = cv2.GaussianBlur(image,ksize=(7,7),sigmaX=7/9,sigmaY=14/9)
+#         b4 = cv2.GaussianBlur(image,ksize=(7,7),sigmaX=14/9,sigmaY=7/9)
+#         image3 = b3 - b4
+#         image4 = b4 - b3
+
+#         b5 = cv2.GaussianBlur(image,ksize=(13,13),sigmaX=13/9,sigmaY=26/9)
+#         b6 = cv2.GaussianBlur(image,ksize=(13,13),sigmaX=26/9,sigmaY=13/9)
+#         image5 = b6 - b5
+#         image6 = b5 - b6
+
+#         image = torch.stack([torch.as_tensor(image1), torch.as_tensor(image2), torch.as_tensor(image3), torch.as_tensor(image4), torch.as_tensor(image5), torch.as_tensor(image6)])
+#         image = torchvision.transforms.functional.convert_image_dtype(image, dtype=torch.int8)
+
+#         # ignore values below 50
+#         image = F.threshold(image, threshold=50, value=0)
+#         temporal_image = torch.zeros([self.timesteps]+list(image.shape))
+
+#         # intensity to latency
+#         for t in range(self.timesteps):
+#             temporal_image[t] = self.temporal_transform(image)
+#         return temporal_image
+
+
+# Following code copied from SpykeTorch implementation
+def local_normalization(input, normalization_radius, eps=1e-12):
+    r"""Applies local normalization. on each region (of size radius*2 + 1) the mean value is computed and the
+    intensities will be divided by the mean value. The input is a 4D tensor.
+
+    Args:
+        input (Tensor): The input tensor of shape (timesteps, features, height, width).
+        normalization_radius (int): The radius of normalization window.
+
+    Returns:
+        Tensor: Locally normalized tensor.
+    """
+    # computing local mean by 2d convolution
+    kernel = torch.ones(1,1,normalization_radius*2+1,normalization_radius*2+1,device=input.device).float()/((normalization_radius*2+1)**2)
+    # rearrange 4D tensor so input channels will be considered as minibatches
+    y = input.squeeze(0) # removes minibatch dim which was 1
+    y.unsqueeze_(1)  # adds a dimension after channels so previous channels are now minibatches
+    means = F.conv2d(y,kernel,padding=normalization_radius) + eps # computes means
+    y = y/means # normalization
+    # swap minibatch with channels
+    y.squeeze_(1)
+    y.unsqueeze_(0)
+    return y
+
+class Intensity2Latency:
+    r"""Applies intensity to latency transform. Spike waves are generated in the form of
+    spike bins with almost equal number of spikes.
+
+    Args:
+        number_of_spike_bins (int): Number of spike bins (time steps).
+        to_spike (boolean, optional): To generate spike-wave tensor or not. Default: False
+
+    .. note::
+
+        If :attr:`to_spike` is :attr:`False`, then the result is intensities that are ordered and packed into bins.
+    """
+    def __init__(self, number_of_spike_bins, to_spike=False):
+        self.time_steps = number_of_spike_bins
+        self.to_spike = to_spike
+    
+    # intensities is a tensor of input intensities (1, input_channels, height, width)
+    # returns a tensor of tensors containing spikes in each timestep (non-accumulative)
+    def intensity_to_latency(self, intensities):
+        bins_intensities = []
+        nonzero_cnt = torch.nonzero(intensities).size()[0]
+
+        # Check for empty bins
+        bin_size = nonzero_cnt // self.time_steps
+
+        # Sort
+        intensities_flattened = torch.reshape(intensities, (-1,))
+        intensities_flattened_sorted = torch.sort(intensities_flattened, descending=True)
+
+        # Bin packing
+        sorted_bins_value, sorted_bins_idx = torch.split(intensities_flattened_sorted[0], bin_size), torch.split(intensities_flattened_sorted[1], bin_size)
+
+        for i in range(self.time_steps):
+            spike_map = torch.zeros_like(intensities_flattened_sorted[0])
+            spike_map.scatter_(0, sorted_bins_idx[i], sorted_bins_value[i])
+            spike_map = spike_map.reshape(tuple(intensities.shape))
+            bins_intensities.append(spike_map.squeeze(0).float())
+    
+        return torch.stack(bins_intensities)
 
     def __call__(self, image):
-        image = torch.as_tensor(image).squeeze().numpy()
-        b1 = cv2.GaussianBlur(image,ksize=(3,3),sigmaX=3/9,sigmaY=6/9)
-        b2 = cv2.GaussianBlur(image,ksize=(3,3),sigmaX=6/9,sigmaY=3/9)
-        image1 = b1 - b2
-        image2 = b2 - b1
+        if self.to_spike:
+            return self.intensity_to_latency(image).sign()
+        return self.intensity_to_latency(image)
+        
 
-        b3 = cv2.GaussianBlur(image,ksize=(7,7),sigmaX=7/9,sigmaY=14/9)
-        b4 = cv2.GaussianBlur(image,ksize=(7,7),sigmaX=14/9,sigmaY=7/9)
-        image3 = b3 - b4
-        image4 = b4 - b3
 
-        b5 = cv2.GaussianBlur(image,ksize=(13,13),sigmaX=13/9,sigmaY=26/9)
-        b6 = cv2.GaussianBlur(image,ksize=(13,13),sigmaX=26/9,sigmaY=13/9)
-        image5 = b6 - b5
-        image6 = b5 - b6
-
-        image = torch.stack([torch.as_tensor(image1), torch.as_tensor(image2), torch.as_tensor(image3), torch.as_tensor(image4), torch.as_tensor(image5), torch.as_tensor(image6)])
-        image = torchvision.transforms.functional.convert_image_dtype(image, dtype=torch.int8)
-
-        # ignore values below 50
-        image = F.threshold(image, threshold=50, value=0)
-        temporal_image = torch.zeros([self.timesteps]+list(image.shape))
-
-        # intensity to latency
-        for t in range(self.timesteps):
-            temporal_image[t] = self.temporal_transform(image)
-        return temporal_image
+class S1C1Transform:
+    def __init__(self, filter, timesteps = 15):
+        self.to_tensor = transforms.ToTensor()
+        self.filter = filter
+        self.temporal_transform = Intensity2Latency(timesteps)
+        self.cnt = 0
+    def __call__(self, image):
+        if self.cnt % 1000 == 0:
+            print(self.cnt)
+        self.cnt+=1
+        image = self.to_tensor(image) * 255
+        image.unsqueeze_(0)
+        image = self.filter(image)
+        image = local_normalization(image, 8)
+        temporal_image = self.temporal_transform(image)
+        return temporal_image.sign().byte()
+# Copy from SpykeTorch end
 
 
 use_cupy = True
@@ -103,23 +194,38 @@ def get_latest_checkpoint(directory):
     checkpoint_files.sort(key=lambda x: datetime.datetime.strptime(x.split('_')[1], '%Y%m%d-%H%M%S'))
 
     # Return the latest checkpoint file (the last one in the sorted list)
-    latest_checkpoint = checkpoint_files[-1]
+    latest_checkpoint = checkpoint_files[-1] 
     print(f"Latest checkpoint found: {latest_checkpoint}")
     return os.path.join(directory, latest_checkpoint)
 
 def main():
     # load MNIST dataset, filter with DoG filters and perform intensity to latency encoding
-    transform = transforms.Compose([transforms.ToTensor(), SpikeTransform(), ])
+    # transform = transforms.Compose([transforms.ToTensor(), SpikeTransform(), ])
 
-    train_dataset = datasets.MNIST(root='data', train=True, transform=transform,
-                                   download=True)
-    test_dataset = datasets.MNIST(root='data', train=False, transform=transform,
-                                  download=True)
+    # train_dataset = datasets.MNIST(root='data', train=True, transform=transform,
+    #                                download=True)
+    # test_dataset = datasets.MNIST(root='data', train=False, transform=transform,
+    #                               download=True)
 
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE,
-                                               shuffle=True)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE,
-                                              shuffle=False)
+    # train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE,
+    #                                            shuffle=True)
+    # test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE,
+    #                                           shuffle=False)
+    kernels = [ utils.DoGKernel(3,3/9,6/9),
+            utils.DoGKernel(3,6/9,3/9),
+            utils.DoGKernel(7,7/9,14/9),
+            utils.DoGKernel(7,14/9,7/9),
+            utils.DoGKernel(13,13/9,26/9),
+            utils.DoGKernel(13,26/9,13/9)]
+    # threshold changed to 30 instead of 50; otherwise only spikes for the first 3 time steps
+    filter = utils.Filter(kernels, padding = 6, thresholds = 30)
+    s1c1 = S1C1Transform(filter)    
+
+    data_root = "data"
+    train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
+    test_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=False, download=True, transform = s1c1))
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 
     net = Network(number_of_classes=10)
@@ -201,12 +307,13 @@ def main():
                 perf = torch.tensor([0,0,0]) # correct, wrong, silence
                 for batch, (frame, label) in enumerate(train_loader):
                     print(f" batch {batch}")
+                    frame = frame.float()
                     frame = frame.to('cpu:0')
                     frame = frame.transpose(0,
                                             1)  # [N, T, C, H, W] -> [T, N, C, H, W]  # ...
         
                     c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
-        
+
                     if training_layer == 3:
                         decisions = net.get_decision()
                         rewards = torch.ones_like(decisions)  # rewards are 1 if decision and label match
@@ -225,6 +332,7 @@ def main():
                     if training_layer == 2:
                         # update weights according to STDP
                         net.stdp2(pad1_out, n2_out, potential2, kwta=8, inhibition_radius=2)
+                        # print(net.neuron2.spiked[0])
 
                         if batch!=0 and batch % scale_learning_rate_after_batches == 0:
                             ap = torch.tensor(net.stdp2.learning_rate[0][0].item(), device=net.stdp2.learning_rate[0][0].device) * 2
@@ -235,6 +343,10 @@ def main():
                     if training_layer == 3:
                         # update weights according to STDP
                         # s3_learner.step(on_grad=False, eligible_neurons=winners)
+
+                        # print(potential3.shape, n3_out.shape)
+                        # print(n3_out[:, 0, 0])
+                        
         
                         # update weights according to RSTDP
                         for reward in rewards:
@@ -271,11 +383,18 @@ def main():
                     net.conv2.weight.data.clamp_(0, 1)
                     net.conv3.weight.data.clamp_(0.2, 0.8)
                     # reset the network and the learners after each batch
+                    # print(net.conv1.weight[0,0])
                     functional.reset_net(net)
                     # net.stdp1.reset()
                     # net.stdp2.reset()
                     # net.stdp3.reset()
                     # net.anti_stdp3.reset()
+                    net.neuron1.spiked = None
+                    net.neuron2.spiked = None
+                    net.neuron3.spiked = None
+                    net.conv1.weight.grad = None
+                    net.conv2.weight.grad = None
+                    net.conv3.weight.grad = None
 
                 print(f"epoch: {epoch}, training_layer: {training_layer}")
                 save_checkpoint(net, epoch, training_layer, directory='checkpoints')
@@ -310,6 +429,7 @@ def main():
                         frame = frame.to('cpu:0')
                         frame = frame.transpose(0,
                                                 1)  # [N, T, C, H, W] -> [T, N, C, H, W]  # ...
+                        frame = frame.float()
 
                         c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
 
