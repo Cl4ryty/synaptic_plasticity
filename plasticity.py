@@ -19,7 +19,7 @@ def get_k_winners(potentials, spikes, kwta=3, inhibition_radius=0):
     maximum_potential = spike_potentials.max()
 
     # 'reward' early spikes by adding the maximum potential times the number of time steps that follow after a spike
-    time_steps = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N, C, h, w)
+    time_steps = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N, C, h, w) + 1
     early_reward = time_steps * spikes * maximum_potential
 
     total = spike_potentials + early_reward
@@ -98,8 +98,8 @@ class STDP(nn.Module):
         _, N_post, C_post, h_post, w_post = spikes_post.shape
 
         # create tensors with same dimensionality but entries are T to 0 (early spikes have higher value)
-        pre_times = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_pre, C_pre, h_pre, w_pre) * spikes_pre
-        post_times = torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_post, C_post, h_post, w_post) * spikes_post
+        pre_times = (torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_pre, C_pre, h_pre, w_pre) + 1) * spikes_pre
+        post_times = (torch.arange(T-1, -1, -1).view(T, 1, 1, 1, 1).expand(-1, N_post, C_post, h_post, w_post) + 1) * spikes_post
 
         # reduce time dimensionality
         pre_times = torch.sum(pre_times, dim=0)
@@ -121,35 +121,38 @@ class STDP(nn.Module):
         
         return result # return shape=[N, kwth, C_pre, kernel_width, kernel_height]
     
-    def forward(self, spikes_pre, spikes_post, potentials, winners=None, kwta=1, inhibition_radius=0):
+    def forward(self, spikes_pre, spikes_post, potentials, winners=None, kwta=1, inhibition_radius=0, reward_batch=-1):
         if winners is None:
-            winners = get_k_winners(potentials=potentials, spikes=spikes_post, kwta=kwta, inhibition_radius=inhibition_radius)
-        
+            winners = get_k_winners(potentials=potentials, spikes=spikes_post, kwta=kwta, inhibition_radius=inhibition_radius)    
         
         pairings = self.get_spike_order(spikes_pre=spikes_pre, spikes_post=spikes_post, winners=winners)
-
-        # print(pairings[0,0,0])
-
         
         dw = torch.zeros_like(self.synapse.weight)
-        for i in range(winners.size(0)): # batch
+        if reward_batch == -1: 
+            for i in range(winners.size(0)): # batch
+                lr = torch.zeros_like(self.synapse.weight)
+                for j in range(winners.size(1)): # kwta
+                    if potentials[i, winners[i,j,0], winners[i,j,1], winners[i,j,2]] > 0:
+                        feature_map = winners[i][j][0]
+                        lr[feature_map] = torch.where(pairings[i][j], *(self.learning_rate[feature_map]))
+
+                dw += lr * ((self.synapse.weight-self.lower_bound) * (self.upper_bound-self.synapse.weight) if self.use_stabilizer else 1)
+        else: 
             lr = torch.zeros_like(self.synapse.weight)
             for j in range(winners.size(1)): # kwta
-                if potentials[i, winners[i,j,0], winners[i,j,1], winners[i,j,2]] > 0:
-                    feature_map = winners[i][j][0]
-                    lr[feature_map] = torch.where(pairings[i][j], *(self.learning_rate[feature_map]))
-            
+                if potentials[reward_batch, winners[reward_batch,j,0], winners[reward_batch,j,1], winners[reward_batch,j,2]] > 0:
+                    feature_map = winners[reward_batch][j][0]
+                    lr[feature_map] = torch.where(pairings[reward_batch][j], *(self.learning_rate[feature_map]))
+                    
             dw += lr * ((self.synapse.weight-self.lower_bound) * (self.upper_bound-self.synapse.weight) if self.use_stabilizer else 1)
-            # print(dw.shape)
-            # print(dw[0,0])
-
+            
+            
         # todo: if on_grad: like in spikingjelly stdp learner
         if self.synapse.weight.grad is None:
                 self.synapse.weight.grad = -dw
         else:
             self.synapse.weight.grad = self.synapse.weight.grad - dw
 
-        # print(dw[0,0])
 
         
 
