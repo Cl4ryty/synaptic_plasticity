@@ -419,17 +419,21 @@ def main():
                         
         
                         # update weights according to RSTDP
-                        for reward in rewards:
+                        # print("rewards ", rewards.shape)
+                        # print(pad2_out.shape, n3_out.shape, potential3.shape)
+                        for i, reward in enumerate(rewards):                
                             if reward == 1:
                                 # reward
-                                net.stdp3(pad2_out, n3_out, potential3, kwta=1)
+                                
+                                net.stdp3(pad2_out, n3_out, potential3, kwta=1, reward_batch=i)
                             else:
                                 # punish
-                                net.anti_stdp3(pad2_out, n3_out, potential3, kwta=1)
+                                net.anti_stdp3(pad2_out, n3_out, potential3, kwta=1, reward_batch=i)
 
                         # get hits and misses for this batch
                         batch_hits = torch.sum(rewards == 1)
                         batch_misses = torch.sum(rewards == -1)
+                        print("hits ", batch_hits, "miss ", batch_misses)
 
                         #update adaptive learning rates
                         apr_adapt = apr * (batch_misses/BATCH_SIZE * adaptive_int + adaptive_min)
