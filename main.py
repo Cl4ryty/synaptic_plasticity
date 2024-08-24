@@ -279,8 +279,9 @@ def main():
         start_epoch = 0
         training_layer = 1
 
-    training = [[[0, s1_training_epochs], 1], [[0, s2_training_epochs], 2],
-                [[0, s3_training_epochs], 3]]
+    training = [[[0, s1_training_epochs, s1_training_iterations], 1],
+                [[0, s2_training_epochs, s2_training_iterations], 2],
+                [[0, s3_training_epochs, s2_training_iterations], 3]]
 
 
     training = training[training_layer-1:]
@@ -294,7 +295,8 @@ def main():
     writer = SummaryWriter(
         'runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
 
-    for [start_epoch, end_epoch], training_layer in training:
+    for [start_epoch, end_epoch, samples_to_train], training_layer in training:
+        sample_counter = 0
         if training_layer == 3:
             running_correct = 0
             running_incorrect = 0
@@ -303,8 +305,17 @@ def main():
 
         with torch.no_grad():
             for epoch in range(start_epoch, end_epoch+1):
+                print(f"starting epoch: {epoch}, training_layer: {training_layer}")
                 # train
                 perf = torch.tensor([0,0,0]) # correct, wrong, silence
+
+                # train for only the specified number of samples (plus what is needed to fill a batch)
+                # - this is more accurate than going by just epochs
+                # check this here to break out of the epoch loop and start straining the next layer
+                sample_counter += batch_size
+                if sample_counter >= samples_to_train:
+                    break
+
                 for batch, (frame, label) in enumerate(train_loader):
                     print(f" batch {batch}")
                     frame = frame.float()
@@ -400,7 +411,12 @@ def main():
                     net.conv2.weight.grad = None
                     net.conv3.weight.grad = None
 
-                print(f"epoch: {epoch}, training_layer: {training_layer}")
+                    # train for only the specified number of samples (plus what is needed to fill a batch)
+                    # - this is more accurate than going by just epochs
+                    sample_counter += batch_size
+                    if sample_counter >= samples_to_train:
+                        break
+
                 save_checkpoint(net, epoch, training_layer, directory='checkpoints')
 
                 # save training accuracies
