@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 import torchvision
+from joblib.externals.loky.backend.fork_exec import fork_exec
+from matplotlib import pyplot as plt
 from torchvision import datasets, transforms
 import cv2
 from torch.utils.tensorboard import SummaryWriter
@@ -12,6 +14,13 @@ import numpy as np
 import os
 import datetime
 import utils
+
+# use NMNIST instead of MNIST
+import tonic
+from tonic import DiskCachedDataset, MemoryCachedDataset
+from torch.utils.data import DataLoader
+
+from synaptic_plasticity.visualization_utils import plot_conv_weights
 
 
 # class SpikeTransform:
@@ -118,8 +127,6 @@ class Intensity2Latency:
         if self.to_spike:
             return self.intensity_to_latency(image).sign()
         return self.intensity_to_latency(image)
-        
-
 
 class S1C1Transform:
     def __init__(self, filter, timesteps = 15):
@@ -220,15 +227,64 @@ def main():
     # threshold changed to 30 instead of 50; otherwise only spikes for the first 3 time steps
     filter = utils.Filter(kernels, padding = 6, thresholds = 30)
     s1c1 = S1C1Transform(filter)    
+    #
+    # data_root = "data"
+    # train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
+    # test_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=False, download=True, transform = s1c1))
+    # train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    # test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    data_root = "data"
-    train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
-    test_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=False, download=True, transform = s1c1))
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+    # load NMNIST
+    sensor_size = tonic.datasets.NMNIST.sensor_size
+    frame_transform = tonic.transforms.Compose([tonic.transforms.Denoise(filter_time=10000),
+                                                tonic.transforms.RefractoryPeriod(
+                                                    delta=20000000), #set really high refractory period to get only one event per pixel
+                                          tonic.transforms.ToFrame(
+                                              sensor_size=sensor_size,
+                                              time_window=20000#microseconds
+                                          )]
+                                         )
+
+    MNIST_train = tonic.datasets.NMNIST(save_to="../../tutorials/data",
+            train=True, transform=frame_transform)
+    print("MNIST_train", MNIST_train)
+
+    MNIST_test = tonic.datasets.NMNIST(save_to="../../tutorials/data",
+            train=False, transform=frame_transform)
+
+    # cache in memory for faster loading
+    cached_MNIST_train = MemoryCachedDataset(MNIST_train)
+    cached_MNIST_test = MemoryCachedDataset(MNIST_test)
+
+    # use padding to ensure that all samples in a batch have the same length
+    train_loader = DataLoader(cached_MNIST_train, batch_size=BATCH_SIZE, shuffle=True,
+                              num_workers=12,
+                              collate_fn=tonic.collation.PadTensors())
+    test_loader = DataLoader(cached_MNIST_test, batch_size=BATCH_SIZE,
+                                  shuffle=True, num_workers=12,
+                                  collate_fn=tonic.collation.PadTensors())
+
+    # end of dataset loading
+
+    for image_batch, label_batch in train_loader:
+        print("MNIST")
+        print("image batch shape", image_batch.shape)
+        print("label batch shape", label_batch.shape)
+        for image, label in zip(image_batch, label_batch):
+            print("image shape", image.shape)
+            print("label shape", label.shape)
+            for timestep, i in enumerate(image):
+                plt.imshow(i[0])
+                plt.show()
+            break
+        break
 
 
     net = Network(number_of_classes=10)
+
+    # test display function
+    plot_conv_weights(net, 1)
 
 
     # use multistep mode for faster training
@@ -242,7 +298,7 @@ def main():
     batch_misses = 0
     batch_size = BATCH_SIZE
 
-    num_train_examples = len(train_dataset)
+    num_train_examples = len(MNIST_train)
 
     scale_learning_rate_after_batches = 500 // BATCH_SIZE
 
@@ -267,7 +323,7 @@ def main():
     optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.)
 
     # check if there are files to load the weights from
-    checkpoint_dir = 'checkpoints'
+    checkpoint_dir = 'checkpoints_neuromorphic'
     latest_checkpoint_path = get_latest_checkpoint(checkpoint_dir)
     if latest_checkpoint_path:
         # Load the checkpoint if found
@@ -279,8 +335,8 @@ def main():
         start_epoch = 0
         training_layer = 1
 
-    training = [[[0, s1_training_epochs], 1], [[0, s2_training_epochs], 2],
-                [[0, s3_training_epochs], 3]]
+    training = [[[0, s1_training_epochs, s1_training_iterations], 1], [[0, s2_training_epochs, s2_training_iterations], 2],
+                [[0, s3_training_epochs, s2_training_iterations], 3]]
 
 
     training = training[training_layer-1:]
@@ -294,7 +350,12 @@ def main():
     writer = SummaryWriter(
         'runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
 
-    for [start_epoch, end_epoch], training_layer in training:
+
+
+
+    for [start_epoch, end_epoch, samples_to_train], training_layer in training:
+        sample_counter = 0
+
         if training_layer == 3:
             running_correct = 0
             running_incorrect = 0
@@ -303,8 +364,17 @@ def main():
 
         with torch.no_grad():
             for epoch in range(start_epoch, end_epoch+1):
+                print(f"starting epoch: {epoch}, training_layer: {training_layer}")
                 # train
                 perf = torch.tensor([0,0,0]) # correct, wrong, silence
+
+                # train for only the specified number of samples (plus what is needed to fill a batch)
+                # - this is more accurate than going by just epochs
+                # check this here to break out of the epoch loop and start straining the next layer
+                sample_counter += batch_size
+                if sample_counter >= samples_to_train:
+                    break
+
                 for batch, (frame, label) in enumerate(train_loader):
                     print(f" batch {batch}")
                     frame = frame.float()
@@ -396,8 +466,14 @@ def main():
                     net.conv2.weight.grad = None
                     net.conv3.weight.grad = None
 
-                print(f"epoch: {epoch}, training_layer: {training_layer}")
-                save_checkpoint(net, epoch, training_layer, directory='checkpoints')
+                    # train for only the specified number of samples (plus what is needed to fill a batch)
+                    # - this is more accurate than going by just epochs
+                    sample_counter += batch_size
+                    if sample_counter >= samples_to_train:
+                        break
+
+
+                save_checkpoint(net, epoch, training_layer, directory=checkpoint_dir)
 
                 # save training accuracies
                 if training_layer == 3:

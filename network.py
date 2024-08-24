@@ -13,7 +13,7 @@ class Network(nn.Module):
         self.number_of_classes = number_of_classes
         self.class_labels = None
 
-        self.conv1 = layer.Conv2d(in_channels=6, out_channels=30, kernel_size=5)
+        self.conv1 = layer.Conv2d(in_channels=2, out_channels=30, kernel_size=5)
         self.neuron1_thr = 15.
         self.k1 = 5
         self.r1 = 3
