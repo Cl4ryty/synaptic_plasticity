@@ -20,8 +20,6 @@ import tonic
 from tonic import DiskCachedDataset, MemoryCachedDataset
 from torch.utils.data import DataLoader
 
-from synaptic_plasticity.visualization_utils import plot_conv_weights
-
 
 # class SpikeTransform:
 #     def __init__(self, timesteps=15):
@@ -282,10 +280,6 @@ def main():
 
 
     net = Network(number_of_classes=10)
-
-    # test display function
-    plot_conv_weights(net, 1)
-
 
     # use multistep mode for faster training
     functional.set_step_mode(net, step_mode='m')
