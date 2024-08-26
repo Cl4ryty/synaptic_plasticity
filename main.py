@@ -314,10 +314,10 @@ def main():
     app_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * app
     anp_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * anp
 
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.)
+    optimizer = torch.optim.SGD(net.parameters(), lr=1.0, momentum=0.)
 
     # check if there are files to load the weights from
-    checkpoint_dir = 'checkpoints_neuromorphic'
+    checkpoint_dir = 'checkpoints_neuromorphic_1'
     latest_checkpoint_path = get_latest_checkpoint(checkpoint_dir)
     if latest_checkpoint_path:
         # Load the checkpoint if found
@@ -330,7 +330,7 @@ def main():
         training_layer = 1
 
     training = [[[0, s1_training_epochs, s1_training_iterations], 1], [[0, s2_training_epochs, s2_training_iterations], 2],
-                [[0, s3_training_epochs, s2_training_iterations], 3]]
+                [[0, 680, s2_training_iterations], 3]]
 
 
     training = training[training_layer-1:]
@@ -365,7 +365,7 @@ def main():
                 # train for only the specified number of samples (plus what is needed to fill a batch)
                 # - this is more accurate than going by just epochs
                 # check this here to break out of the epoch loop and start straining the next layer
-                sample_counter += batch_size
+                # sample_counter += batch_size
                 if sample_counter >= samples_to_train:
                     break
 
