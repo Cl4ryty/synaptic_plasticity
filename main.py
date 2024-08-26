@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 import torchvision
-from joblib.externals.loky.backend.fork_exec import fork_exec
 from matplotlib import pyplot as plt
 from torchvision import datasets, transforms
 import cv2
@@ -224,7 +223,7 @@ def main():
             utils.DoGKernel(13,26/9,13/9)]
     # threshold changed to 30 instead of 50; otherwise only spikes for the first 3 time steps
     filter = utils.Filter(kernels, padding = 6, thresholds = 30)
-    s1c1 = S1C1Transform(filter)    
+    s1c1 = S1C1Transform(filter)
     #
     # data_root = "data"
     # train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
@@ -342,7 +341,7 @@ def main():
 
     # Initialize TensorBoard writer
     writer = SummaryWriter(
-        'runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
+        'runs/experiment_2')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
 
 
 
@@ -516,6 +515,14 @@ def main():
                         running_incorrect += number_incorrect
                         running_no_spikes += number_no_spike
                         batch_count += 1
+
+                        functional.reset_net(net)
+                        net.neuron1.spiked = None
+                        net.neuron2.spiked = None
+                        net.neuron3.spiked = None
+                        net.conv1.weight.grad = None
+                        net.conv2.weight.grad = None
+                        net.conv3.weight.grad = None
 
                     correct = running_correct / batch_count
                     incorrect = running_incorrect / batch_count
