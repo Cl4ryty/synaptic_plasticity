@@ -219,7 +219,7 @@ def main():
             utils.DoGKernel(13,26/9,13/9)]
     # threshold changed to 30 instead of 50; otherwise only spikes for the first 3 time steps
     filter = utils.Filter(kernels, padding = 6, thresholds = 30)
-    s1c1 = S1C1Transform(filter)    
+    s1c1 = S1C1Transform(filter)   
 
     data_root = "data"
     train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
@@ -264,7 +264,7 @@ def main():
     app_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * app
     anp_adapt = ((1.0 / 10) * adaptive_int + adaptive_min) * anp
 
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.01, momentum=0.)
+    optimizer = torch.optim.SGD(net.parameters(), lr=1.0, momentum=0.)
 
     # check if there are files to load the weights from
     checkpoint_dir = 'checkpoints'
@@ -293,7 +293,7 @@ def main():
 
     # Initialize TensorBoard writer
     writer = SummaryWriter(
-        'runs/experiment_1')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
+        'runs/experiment_2')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
 
     for [start_epoch, end_epoch, samples_to_train], training_layer in training:
         sample_counter = 0
@@ -313,8 +313,8 @@ def main():
                 # - this is more accurate than going by just epochs
                 # check this here to break out of the epoch loop and start straining the next layer
                 sample_counter += batch_size
-                if sample_counter >= samples_to_train:
-                    break
+                # if sample_counter >= samples_to_train:
+                #     break
 
                 for batch, (frame, label) in enumerate(train_loader):
                     print(f" batch {batch}")
@@ -414,8 +414,8 @@ def main():
                     # train for only the specified number of samples (plus what is needed to fill a batch)
                     # - this is more accurate than going by just epochs
                     sample_counter += batch_size
-                    if sample_counter >= samples_to_train:
-                        break
+                    # if sample_counter >= samples_to_train:
+                    #     break
 
                 save_checkpoint(net, epoch, training_layer, directory='checkpoints')
 
@@ -462,6 +462,14 @@ def main():
                         running_incorrect += number_incorrect
                         running_no_spikes += number_no_spike
                         batch_count += 1
+
+                        functional.reset_net(net)
+                        net.neuron1.spiked = None
+                        net.neuron2.spiked = None
+                        net.neuron3.spiked = None
+                        net.conv1.weight.grad = None
+                        net.conv2.weight.grad = None
+                        net.conv3.weight.grad = None
 
                     correct = running_correct / batch_count
                     incorrect = running_incorrect / batch_count
