@@ -2,10 +2,8 @@ import torch
 import torch.nn.functional as F
 import torchvision
 from torchvision import datasets, transforms
-import cv2
 from torch.utils.tensorboard import SummaryWriter
 from spikingjelly.activation_based import encoding, functional
-
 from network import Network
 from plasticity import get_k_winners, STDP
 import numpy as np
