@@ -46,6 +46,7 @@ synaptic_plasticity
 - ```src/main.py``` contains the training loop to train the spiking neural network.
 - ```src/network.py``` specifies the network architecture.
 - ```src/neuron.py``` specifies the dynamics of the Integrate-and-Fire (IF) neuron model.
+- ```src/plasticity.py``` contains the implementation of the learning algorithm - the STDP as described by [Mozafari et al.](https://www.sciencedirect.com/science/article/abs/pii/S0031320319301906) - as well the function to select the k winners eligible for plasticity.
 > [!IMPORTANT]
 > src/utils.py is mostly copied from [SpykeTorch](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py) to ensure that the input data is encoded the same way. The only difference is that we turned off the accumulation of spikes to restrict an input neuron to produce a single spike only.
 - ```src/utils.py``` contains functions for encoding the MNIST images into spike trains. 
