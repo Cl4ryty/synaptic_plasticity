@@ -1,138 +1,18 @@
-# copied from SpykeTorch
 import torch
 import torch.nn.functional as fn
+from torchvision import transforms
 import numpy as np
 import math
-from torchvision import transforms
-from torchvision import datasets
 import os
-
-def to_pair(data):
-    r"""Converts a single or a tuple of data into a pair. If the data is a tuple with more than two elements, it selects
-    the first two of them. In case of single data, it duplicates that data into a pair.
-
-    Args:
-        data (object or tuple): The input data.
-
-    Returns:
-        Tuple: A pair of data.
-    """
-    if isinstance(data, tuple):
-        return data[0:2]
-    return (data, data)
-
-def generate_inhibition_kernel(inhibition_percents):
-    r"""Generates an inhibition kernel suitable to be used by :func:`~functional.intensity_lateral_inhibition`.
-
-    Args:
-        inhibition_percents (sequence): The sequence of inhibition factors (in range [0,1]).
-
-    Returns:
-        Tensor: Inhibition kernel.
-    """
-    inhibition_kernel = torch.zeros(2*len(inhibition_percents)+1, 2*len(inhibition_percents)+1).float()
-    center = len(inhibition_percents)
-    for i in range(2*len(inhibition_percents)+1):
-        for j in range(2*len(inhibition_percents)+1):
-            dist = int(max(math.fabs(i - center), math.fabs(j - center)))
-            if dist != 0:
-                inhibition_kernel[i,j] = inhibition_percents[dist - 1]
-    return inhibition_kernel
-
-def tensor_to_text(data, address):
-    r"""Saves a tensor into a text file in row-major format. The first line of the file contains comma-separated integers denoting
-    the size of each dimension. The second line contains comma-separated values indicating all the tensor's data.
-
-    Args:
-        data (Tensor): The tensor to be saved.
-        address (str): The saving address.
-    """
-    f = open(address, "w")
-    data_cpu = data.cpu()
-    shape = data.shape
-    print(",".join(map(str, shape)), file=f)
-    data_flat = data_cpu.view(-1).numpy()
-    print(",".join(data_flat.astype(np.str)), file=f)
-    f.close()
-
-def text_to_tensor(address, type='float'):
-    r"""Loads a tensor from a text file. Format of the text file is as follows: The first line of the file contains comma-separated integers denoting
-    the size of each dimension. The second line contains comma-separated values indicating all the tensor's data.
-
-    Args:
-        address (str): Address of the text file.
-        type (float or int, optional): The type of the tensor's data ('float' or 'int'). Default: 'float'
-
-    Returns:
-        Tensor: The loaded tensor.
-    """
-    f = open(address, "r")
-    shape = tuple(map(int, f.readline().split(",")))
-    data = np.array(f.readline().split(","))
-    if type == 'float':
-        data = data.astype(np.float32)
-    elif type == 'int':
-        data = data.astype(np.int32)
-    else:
-        raise ValueError("type must be 'int' or 'float'")
-    data = torch.from_numpy(data)
-    data = data.reshape(shape)
-    f.close()
-    return data
-
-class LateralIntencityInhibition:
-    r"""Applies lateral inhibition on intensities. For each location, this inhibition decreases the intensity of the
-    surrounding cells that has lower intensities by a specific factor. This factor is relative to the distance of the
-    neighbors and are put in the :attr:`inhibition_percents`.
-
-    Args:
-        inhibition_percents (sequence): The sequence of inhibition factors (in range [0,1]).
-    """
-    def __init__(self, inhibition_percents):
-        self.inhibition_kernel = generate_inhibition_kernel(inhibition_percents)
-        self.inhibition_kernel.unsqueeze_(0).unsqueeze_(0)
-
-    # decrease lateral intencities by factors given in the inhibition_kernel
-    def intensity_lateral_inhibition(self, intencities):
-        intencities.squeeze_(0)
-        intencities.unsqueeze_(1)
-
-        inh_win_size = self.inhibition_kernel.size(-1)
-        rad = inh_win_size//2
-        # repeat each value
-        values = intencities.reshape(intencities.size(0),intencities.size(1),-1,1)
-        values = values.repeat(1,1,1,inh_win_size)
-        values = values.reshape(intencities.size(0),intencities.size(1),-1,intencities.size(-1)*inh_win_size)
-        values = values.repeat(1,1,1,inh_win_size)
-        values = values.reshape(intencities.size(0),intencities.size(1),-1,intencities.size(-1)*inh_win_size)
-        # extend patches
-        padded = fn.pad(intencities,(rad,rad,rad,rad))
-        # column-wise
-        patches = padded.unfold(-1,inh_win_size,1)
-        patches = patches.reshape(patches.size(0),patches.size(1),patches.size(2),-1,patches.size(3)*patches.size(4))
-        patches.squeeze_(-2)
-        # row-wise
-        patches = patches.unfold(-2,inh_win_size,1).transpose(-1,-2)
-        patches = patches.reshape(patches.size(0),patches.size(1),1,-1,patches.size(-1))
-        patches.squeeze_(-3)
-        # compare each element by its neighbors
-        coef = values - patches
-        coef.clamp_(min=0).sign_() # "ones" are neighbors greater than center
-        # convolution with full stride to get accumulative inhibiiton factor
-        factors = fn.conv2d(coef, self.inhibition_kernel, stride=inh_win_size)
-        result = intencities + intencities * factors
-
-        intencities.squeeze_(1)
-        intencities.unsqueeze_(0)
-        result.squeeze_(1)
-        result.unsqueeze_(0)
-        return result
-
-    def __call__(self,input):
-        return self.intensity_lateral_inhibition(input)
+import datetime
 
 class FilterKernel:
     r"""Base class for generating image filter kernels such as Gabor, DoG, etc. Each subclass should override :attr:`__call__` function.
+   
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
+
     """
     def __init__(self, window_size):
         self.window_size = window_size
@@ -142,6 +22,10 @@ class FilterKernel:
 
 class DoGKernel(FilterKernel):
     r"""Generates DoG filter kernel.
+    
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
 
     Args:
         window_size (int): The size of the window (square window).
@@ -169,41 +53,13 @@ class DoGKernel(FilterKernel):
         dog_tensor = torch.from_numpy(dog)
         return dog_tensor.float()
 
-class GaborKernel(FilterKernel):
-    r"""Generates Gabor filter kernel.
-
-    Args:
-        window_size (int): The size of the window (square window).
-        orientation (float): The orientation of the Gabor filter (in degrees).
-        div (float, optional): The divisor of the lambda equation. Default: 4.0
-    """
-    def __init__(self, window_size, orientation, div=4.0):
-        super(GaborKernel, self).__init__(window_size)
-        self.orientation = orientation
-        self.div = div
-
-    # returns a 2d tensor corresponding to the requested Gabor filter
-    def __call__(self):
-        w = self.window_size//2
-        x, y = np.mgrid[-w:w+1:1, -w:w+1:1]
-        lamda = self.window_size * 2 / self.div
-        sigma = lamda * 0.8
-        sigmaSq = sigma * sigma
-        g = 0.3;
-        theta = (self.orientation * np.pi) / 180;
-        Y = y*np.cos(theta) - x*np.sin(theta)
-        X = y*np.sin(theta) + x*np.cos(theta)
-        gabor = np.exp(-(X * X + g * g * Y * Y) / (2 * sigmaSq)) * np.cos(2 * np.pi * X / lamda);
-        gabor_mean = np.mean(gabor)
-        gabor = gabor - gabor_mean
-        gabor_max = np.max(gabor)
-        gabor = gabor / gabor_max
-        gabor_tensor = torch.from_numpy(gabor)
-        return gabor_tensor.float()
-
 class Filter:
     r"""Applies a filter transform. Each filter contains a sequence of :attr:`FilterKernel` objects.
     The result of each filter kernel will be passed through a given threshold (if not :attr:`None`).
+   
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
 
     Args:
         filter_kernels (sequence of FilterKernels): The sequence of filter kernels.
@@ -253,94 +109,12 @@ class Filter:
             torch.abs_(output)
         return output
 
-class Intensity2Latency:
-    r"""Applies intensity to latency transform. Spike waves are generated in the form of
-    spike bins with almost equal number of spikes.
-
-    Args:
-        number_of_spike_bins (int): Number of spike bins (time steps).
-        to_spike (boolean, optional): To generate spike-wave tensor or not. Default: False
-
-    .. note::
-
-        If :attr:`to_spike` is :attr:`False`, then the result is intesities that are ordered and packed into bins.
-    """
-    def __init__(self, number_of_spike_bins, to_spike=False):
-        self.time_steps = number_of_spike_bins
-        self.to_spike = to_spike
-    
-    # intencities is a tensor of input intencities (1, input_channels, height, width)
-    # returns a tensor of tensors containing spikes in each timestep (considers minibatch for timesteps)
-    # spikes are accumulative, i.e. spikes in timestep i are also presented in i+1, i+2, ...
-    def intensity_to_latency(self, intencities):
-        #bins = []
-        bins_intencities = []
-        nonzero_cnt = torch.nonzero(intencities).size()[0]
-
-        #check for empty bins
-        bin_size = nonzero_cnt//self.time_steps
-
-        #sort
-        intencities_flattened = torch.reshape(intencities, (-1,))
-        intencities_flattened_sorted = torch.sort(intencities_flattened, descending=True)
-
-        #bin packing
-        sorted_bins_value, sorted_bins_idx = torch.split(intencities_flattened_sorted[0], bin_size), torch.split(intencities_flattened_sorted[1], bin_size)
-
-        #add to the list of timesteps
-        spike_map = torch.zeros_like(intencities_flattened_sorted[0])
-    
-        for i in range(self.time_steps):
-            spike_map.scatter_(0, sorted_bins_idx[i], sorted_bins_value[i])
-            spike_map_copy = spike_map.clone().detach()
-            spike_map_copy = spike_map_copy.reshape(tuple(intencities.shape))
-            bins_intencities.append(spike_map_copy.squeeze(0).float())
-            #bins.append(spike_map_copy.sign().squeeze_(0).float())
-    
-        return torch.stack(bins_intencities)#, torch.stack(bins)
-        #return torch.stack(bins)
-
-    def __call__(self, image):
-        if self.to_spike:
-            return self.intensity_to_latency(image).sign()
-        return self.intensity_to_latency(image)
-
-#class ImageFolderCache(datasets.ImageFolder):
-#	def __init__(self, root, transform=None, target_transform=None,
-#                 loader=datasets.folder.default_loader, cache_address=None):
-#		super(ImageFolderCache, self).__init__(root, transform=transform, target_transform=target_transform, loader=loader)
-#		self.imgs = self.samples
-#		self.cache_address = cache_address
-#		self.cache = [None] * len(self)
-
-#	def __getitem__(self, index):
-#		path, target = self.samples[index]
-#		if self.cache[index] is None:
-#			sample = self.loader(path)
-#			if self.transform is not None:
-#				sample = self.transform(sample)
-#			if self.target_transform is not None:
-#				target = self.target_transform(target)
-
-#			#cache it
-#			if self.cache_address is None:
-#				self.cache[index] = sample
-#			else:
-#				save_path = os.path.join(self.cache_address, str(index)+'.c')
-#				torch.save(sample, save_path)
-#				self.cache[index] = save_path
-#		else:
-#			if self.cache_address is None:
-#				sample = self.cache[index]
-#			else:
-#				sample = torch.load(self.cache[index])
-#		return sample, target
-
-#	def reset_cache(self):
-#		self.cache = [None] * len(self)
-
 class CacheDataset(torch.utils.data.Dataset):
     r"""A wrapper dataset to cache pre-processed data. It can cache data on RAM or a secondary memory.
+
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0. 
 
     .. note::
 
@@ -387,3 +161,188 @@ class CacheDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return len(self.dataset)
+    
+class Intensity2Latency:
+    r"""Applies intensity to latency transform. Spike waves are generated in the form of
+    spike bins with almost equal number of spikes.
+
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
+
+    Modification:
+    - In the original implementation spikes were accumulative, i.e. a spike in timestep i was also presented in the following timesteps (i+1, i+2, ...). 
+    Here the implementations is not accumulative, i.e. a spike in timestep i will not be presented again in the following timesteps. 
+
+    Args:
+        number_of_spike_bins (int): Number of spike bins (time steps).
+        to_spike (boolean, optional): To generate spike-wave tensor or not. Default: False
+
+    .. note::
+
+        If :attr:`to_spike` is :attr:`False`, then the result is intensities that are ordered and packed into bins.
+    """
+    def __init__(self, number_of_spike_bins, to_spike=False):
+        self.time_steps = number_of_spike_bins
+        self.to_spike = to_spike
+    
+    # intensities is a tensor of input intensities (1, input_channels, height, width)
+    # returns a tensor of tensors containing spikes in each timestep (non-accumulative)
+    def intensity_to_latency(self, intensities):
+        bins_intensities = []
+        nonzero_cnt = torch.nonzero(intensities).size()[0]
+
+        # Check for empty bins
+        bin_size = nonzero_cnt // self.time_steps
+
+        # Sort
+        intensities_flattened = torch.reshape(intensities, (-1,))
+        intensities_flattened_sorted = torch.sort(intensities_flattened, descending=True)
+
+        # Bin packing
+        sorted_bins_value, sorted_bins_idx = torch.split(intensities_flattened_sorted[0], bin_size), torch.split(intensities_flattened_sorted[1], bin_size)
+
+        for i in range(self.time_steps):
+            # modification: for each timestep a tensor with zeros is created to not accumulate spikes
+            spike_map = torch.zeros_like(intensities_flattened_sorted[0])
+            spike_map.scatter_(0, sorted_bins_idx[i], sorted_bins_value[i])
+            spike_map = spike_map.reshape(tuple(intensities.shape))
+            bins_intensities.append(spike_map.squeeze(0).float())
+    
+        return torch.stack(bins_intensities)
+
+    def __call__(self, image):
+        if self.to_spike:
+            return self.intensity_to_latency(image).sign()
+        return self.intensity_to_latency(image)
+    
+class S1C1Transform:
+    """Applies a series of transformations to an image, including tensor conversion, filtering, and temporal transformation.
+
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/MozafariDeep.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
+
+    Args:
+        filter (callable): A function or callable object that takes a tensor image as input and returns a filtered tensor.
+        timesteps (int, optional): Number of timesteps for the temporal transformation. Default is 15.
+    """
+    def __init__(self, filter, timesteps = 15):
+        self.to_tensor = transforms.ToTensor()
+        self.filter = filter
+        self.temporal_transform = Intensity2Latency(timesteps)
+        self.cnt = 0
+    def __call__(self, image):
+        if self.cnt % 1000 == 0:
+            print(self.cnt)
+        self.cnt+=1
+        image = self.to_tensor(image) * 255
+        image.unsqueeze_(0)
+        image = self.filter(image)
+        image = local_normalization(image, 8)
+        temporal_image = self.temporal_transform(image)
+        return temporal_image.sign().byte()
+    
+def local_normalization(input, normalization_radius, eps=1e-12):
+    r"""Applies local normalization. on each region (of size radius*2 + 1) the mean value is computed and the
+    intensities will be divided by the mean value. The input is a 4D tensor.
+
+    Attribution:
+    This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/functional.py).
+    This code is licensed under the GNU General Public License (GPL) v3.0.
+
+    Args:
+        input (Tensor): The input tensor of shape (timesteps, features, height, width).
+        normalization_radius (int): The radius of normalization window.
+
+    Returns:
+        Tensor: Locally normalized tensor.
+    """
+    # computing local mean by 2d convolution
+    kernel = torch.ones(1,1,normalization_radius*2+1,normalization_radius*2+1,device=input.device).float()/((normalization_radius*2+1)**2)
+    # rearrange 4D tensor so input channels will be considered as minibatches
+    y = input.squeeze(0) # removes minibatch dim which was 1
+    y.unsqueeze_(1)  # adds a dimension after channels so previous channels are now minibatches
+    means = fn.conv2d(y,kernel,padding=normalization_radius) + eps # computes means
+    y = y/means # normalization
+    # swap minibatch with channels
+    y.squeeze_(1)
+    y.unsqueeze_(0)
+    return y
+    
+def save_checkpoint(model, epoch, training_layer, directory='checkpoints'):
+    """Saves the current state of the model and training details to a checkpoint file.
+    
+    Args:
+        model (torch.nn.Module): The PyTorch model whose state dictionary will be saved.
+        epoch (int): The current epoch number, which will be included in the checkpoint filename.
+        training_layer (int): An integer indicating the index of the layer that is currently being trained.
+        directory (str, optional): The directory where the checkpoint file will be saved. Default is 'checkpoints'.
+    """
+    print("epoch", epoch, "tl", training_layer)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    # Generate a timestamped filename
+    timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    filename = f'checkpoint_{timestamp}_epoch_{epoch}.pth'
+    filepath = os.path.join(directory, filename)
+
+    checkpoint = {'epoch': epoch, 'model_state_dict': model.state_dict(),
+            'training_layer': training_layer, }
+    torch.save(checkpoint, filepath)
+    print(
+        f"Checkpoint saved at epoch {epoch}, training layer {training_layer}.")
+
+def load_checkpoint(model, filename):
+    """Loads a model checkpoint from a specified file and restores the model's state.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model to which the saved state dictionary will be loaded.
+        filename (str): The path to the checkpoint file to be loaded.
+
+    Returns:
+        tuple: A tuple containing:
+            - epoch (int): The epoch number to resume from (incremented by 1).
+            - training_layer (int): The layer that is currently being trained.    
+    """
+    if os.path.isfile(filename):
+        checkpoint = torch.load(filename)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        epoch = checkpoint['epoch'] + 1  # start from the next epoch after the saved one
+        training_layer = checkpoint['training_layer']
+        print(f"Checkpoint loaded: epoch {epoch}, training layer {training_layer}.")
+        return epoch, training_layer
+    else:
+        print(f"No checkpoint found at '{filename}'")
+        return 0, 1  # Resume from epoch 0 if no checkpoint is found
+    
+def get_latest_checkpoint(directory):
+    """Retrieves the path to the most recent checkpoint file in the specified directory.
+
+    Args:
+        directory (str): The path to the directory where checkpoint files are stored.
+
+    Returns:
+        str or None: The full path to the most recent checkpoint file if found, otherwise `None`.
+    """
+    if not os.path.exists(directory):
+        return None
+
+    # List all files in the directory
+    files = os.listdir(directory)
+
+    # Filter out files that match the checkpoint filename pattern
+    checkpoint_files = [file for file in files if file.startswith('checkpoint_') and file.endswith('.pth')]
+
+    if not checkpoint_files:
+        print("No checkpoint files found.")
+        return None
+
+    # Sort the checkpoint files by the timestamp in their filenames
+    checkpoint_files.sort(key=lambda x: datetime.datetime.strptime(x.split('_')[1], '%Y%m%d-%H%M%S'))
+
+    # Return the latest checkpoint file (the last one in the sorted list)
+    latest_checkpoint = checkpoint_files[-1] 
+    print(f"Latest checkpoint found: {latest_checkpoint}")
+    return os.path.join(directory, latest_checkpoint)
