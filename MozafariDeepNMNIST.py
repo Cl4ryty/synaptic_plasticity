@@ -27,8 +27,14 @@ from SpykeTorch import functional as sf
 from SpykeTorch import visualization as vis
 from SpykeTorch import utils
 from torchvision import transforms
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+
 
 use_cuda = True
+
+# Initialize TensorBoard SummaryWriter
+writer = SummaryWriter(f'runs/experiment_{datetime.now().strftime("%Y%m%d-%H%M%S")}')
 
 class MozafariMNIST2018(nn.Module):
     def __init__(self):
@@ -336,3 +342,138 @@ for epoch in range(680):
             torch.save(mozafari.state_dict(), "saved.net")
         print(" Current Test:", perf_test)
         print("    Best Test:", best_test)
+
+for [start_epoch, end_epoch, samples_to_train], training_layer in training:
+    sample_counter = 0
+    if training_layer == 3:
+        running_correct = 0
+        running_incorrect = 0
+        running_no_spikes = 0
+        batch_count = 0
+
+    with torch.no_grad():
+        for epoch in range(start_epoch, end_epoch + 1):
+            print(f"starting epoch: {epoch}, training_layer: {training_layer}")
+            # Initialize performance metrics
+            perf = torch.tensor([0, 0, 0])  # correct, wrong, silence
+
+            # Increment sample counter for the epoch
+            sample_counter += batch_size
+            if sample_counter >= samples_to_train:
+                break
+
+            for batch, (frame, label) in enumerate(train_loader):
+                print(f" batch {batch}")
+                frame = frame.float().to('cpu:0')
+                frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
+
+                c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
+
+                if training_layer == 3:
+                    decisions = net.get_decision()
+                    rewards = torch.ones_like(decisions)  # rewards are 1 if decision and label match
+                    rewards[decisions != label] = -1  # -1 otherwise
+
+                if training_layer == 1:
+                    net.stdp1(frame, n1_out, potential1, kwta=5, inhibition_radius=3)
+                    if batch != 0 and batch % scale_learning_rate_after_batches == 0:
+                        ap = torch.tensor(net.stdp1.learning_rate[0][0].item()) * 2
+                        ap = torch.min(ap, torch.tensor([0.15]))
+                        an = ap * -0.75
+                        net.stdp1.update_all_learning_rate(ap.item(), an.item())
+
+                if training_layer == 2:
+                    net.stdp2(pad1_out, n2_out, potential2, kwta=8, inhibition_radius=2)
+                    if batch != 0 and batch % scale_learning_rate_after_batches == 0:
+                        ap = torch.tensor(net.stdp2.learning_rate[0][0].item()) * 2
+                        ap = torch.min(ap, torch.tensor([0.15]))
+                        an = ap * -0.75
+                        net.stdp2.update_all_learning_rate(ap.item(), an.item())
+
+                if training_layer == 3:
+                    for i, reward in enumerate(rewards):
+                        if reward == 1:
+                            net.stdp3(pad2_out, n3_out, potential3, kwta=1, reward_batch=i)
+                        else:
+                            net.anti_stdp3(pad2_out, n3_out, potential3, kwta=1, reward_batch=i)
+
+                    # Update adaptive learning rates
+                    apr_adapt = apr * (batch_misses / BATCH_SIZE * adaptive_int + adaptive_min)
+                    anr_adapt = anr * (batch_misses / BATCH_SIZE * adaptive_int + adaptive_min)
+                    app_adapt = app * (batch_hits / BATCH_SIZE * adaptive_int + adaptive_min)
+                    anp_adapt = anp * (batch_hits / BATCH_SIZE * adaptive_int + adaptive_min)
+                    net.stdp3.update_all_learning_rate(apr_adapt, anr_adapt)
+                    net.anti_stdp3.update_all_learning_rate(anp_adapt, app_adapt)
+
+                    number_correct = torch.sum(decisions == label)
+                    number_no_spike = torch.sum(decisions == -1)
+                    number_incorrect = decisions.__len__() - number_correct - number_no_spike
+                    running_correct += number_correct
+                    running_incorrect += number_incorrect
+                    running_no_spikes += number_no_spike
+                    batch_count += 1
+
+                optimizer.step()
+                net.conv1.weight.data.clamp_(0, 1)
+                net.conv2.weight.data.clamp_(0, 1)
+                net.conv3.weight.data.clamp_(0.2, 0.8)
+                functional.reset_net(net)
+                net.neuron1.spiked = None
+                net.neuron2.spiked = None
+                net.neuron3.spiked = None
+                net.conv1.weight.grad = None
+                net.conv2.weight.grad = None
+                net.conv3.weight.grad = None
+
+                sample_counter += batch_size
+                if sample_counter >= samples_to_train:
+                    break
+
+            save_checkpoint(net, epoch, training_layer, directory='checkpoints')
+
+            # Log training accuracies to TensorBoard
+            if training_layer == 3:
+                correct = running_correct / batch_count
+                incorrect = running_incorrect / batch_count
+                no_spikes = running_no_spikes / batch_count
+                total = correct + incorrect + no_spikes
+                print("Training epoch", epoch, "correct", correct / total,
+                      "incorrect", incorrect / total, "no_spikes", no_spikes / total)
+
+                writer.add_scalar('Training correct percentage', correct / total, epoch)
+                writer.add_scalar('Training incorrect percentage', incorrect / total, epoch)
+                writer.add_scalar('Training no spikes percentage', no_spikes / total, epoch)
+
+            # Test and log validation results every few epochs
+            if training_layer == 3 and epoch % valuation_after_epochs == 0:
+                running_correct = 0
+                running_incorrect = 0
+                running_no_spikes = 0
+                batch_count = 0
+
+                for frame, label in test_loader:
+                    frame = frame.float().to('cpu:0').transpose(0, 1)
+                    c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
+                    decisions = net.get_decision()
+
+                    number_correct = torch.sum(decisions == label)
+                    number_no_spike = torch.sum(decisions == -1)
+                    number_incorrect = decisions.__len__() - number_correct - number_no_spike
+                    running_correct += number_correct
+                    running_incorrect += number_incorrect
+                    running_no_spikes += number_no_spike
+                    batch_count += 1
+
+                correct = running_correct / batch_count
+                incorrect = running_incorrect / batch_count
+                no_spikes = running_no_spikes / batch_count
+                total = correct + incorrect + no_spikes
+                print("Validation at epoch", epoch, "correct", correct / total,
+                      "incorrect", incorrect / total, "no_spikes", no_spikes / total)
+
+                writer.add_scalar('Validation correct percentage', correct / total, epoch)
+                writer.add_scalar('Validation incorrect percentage', incorrect / total, epoch)
+                writer.add_scalar('Validation no spikes percentage', no_spikes / total, epoch)
+
+# Close the TensorBoard writer
+writer.close()
