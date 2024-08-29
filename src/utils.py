@@ -7,7 +7,8 @@ import os
 import datetime
 
 class FilterKernel:
-    r"""Base class for generating image filter kernels such as Gabor, DoG, etc. Each subclass should override :attr:`__call__` function.
+    r"""
+    Base class for generating image filter kernels such as Gabor, DoG, etc. Each subclass should override :attr:`__call__` function.
    
     Attribution:
     This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
@@ -21,7 +22,8 @@ class FilterKernel:
         pass
 
 class DoGKernel(FilterKernel):
-    r"""Generates DoG filter kernel.
+    r"""
+    Generates DoG filter kernel.
     
     Attribution:
     This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
@@ -54,7 +56,8 @@ class DoGKernel(FilterKernel):
         return dog_tensor.float()
 
 class Filter:
-    r"""Applies a filter transform. Each filter contains a sequence of :attr:`FilterKernel` objects.
+    r"""
+    Applies a filter transform. Each filter contains a sequence of :attr:`FilterKernel` objects.
     The result of each filter kernel will be passed through a given threshold (if not :attr:`None`).
    
     Attribution:
@@ -110,7 +113,8 @@ class Filter:
         return output
 
 class CacheDataset(torch.utils.data.Dataset):
-    r"""A wrapper dataset to cache pre-processed data. It can cache data on RAM or a secondary memory.
+    r"""
+    A wrapper dataset to cache pre-processed data. It can cache data on RAM or a secondary memory.
 
     Attribution:
     This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py).
@@ -150,7 +154,8 @@ class CacheDataset(torch.utils.data.Dataset):
         return sample, target
 
     def reset_cache(self):
-        r"""Clears the cached data. It is useful when you want to change a pre-processing parameter during
+        r"""
+        Clears the cached data. It is useful when you want to change a pre-processing parameter during
         the training process.
         """
         if self.cache_address is not None:
@@ -163,7 +168,8 @@ class CacheDataset(torch.utils.data.Dataset):
         return len(self.dataset)
     
 class Intensity2Latency:
-    r"""Applies intensity to latency transform. Spike waves are generated in the form of
+    r"""
+    Applies intensity to latency transform. Spike waves are generated in the form of
     spike bins with almost equal number of spikes.
 
     Attribution:
@@ -217,7 +223,8 @@ class Intensity2Latency:
         return self.intensity_to_latency(image)
     
 class S1C1Transform:
-    """Applies a series of transformations to an image, including tensor conversion, filtering, and temporal transformation.
+    """
+    Applies a series of transformations to an image, including tensor conversion, filtering, and temporal transformation.
 
     Attribution:
     This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/MozafariDeep.py).
@@ -244,7 +251,8 @@ class S1C1Transform:
         return temporal_image.sign().byte()
     
 def local_normalization(input, normalization_radius, eps=1e-12):
-    r"""Applies local normalization. on each region (of size radius*2 + 1) the mean value is computed and the
+    r"""
+    Applies local normalization. on each region (of size radius*2 + 1) the mean value is computed and the
     intensities will be divided by the mean value. The input is a 4D tensor.
 
     Attribution:
@@ -271,7 +279,8 @@ def local_normalization(input, normalization_radius, eps=1e-12):
     return y
     
 def save_checkpoint(model, epoch, training_layer, directory='checkpoints'):
-    """Saves the current state of the model and training details to a checkpoint file.
+    """
+    Saves the current state of the model and training details to a checkpoint file.
     
     Args:
         model (torch.nn.Module): The PyTorch model whose state dictionary will be saved.
@@ -295,7 +304,8 @@ def save_checkpoint(model, epoch, training_layer, directory='checkpoints'):
         f"Checkpoint saved at epoch {epoch}, training layer {training_layer}.")
 
 def load_checkpoint(model, filename):
-    """Loads a model checkpoint from a specified file and restores the model's state.
+    """
+    Loads a model checkpoint from a specified file and restores the model's state.
 
     Args:
         model (torch.nn.Module): The PyTorch model to which the saved state dictionary will be loaded.
@@ -318,7 +328,8 @@ def load_checkpoint(model, filename):
         return 0, 1  # Resume from epoch 0 if no checkpoint is found
     
 def get_latest_checkpoint(directory):
-    """Retrieves the path to the most recent checkpoint file in the specified directory.
+    """
+    Retrieves the path to the most recent checkpoint file in the specified directory.
 
     Args:
         directory (str): The path to the directory where checkpoint files are stored.
