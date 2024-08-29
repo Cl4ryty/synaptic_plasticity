@@ -316,7 +316,7 @@ def main():
     optimizer = torch.optim.SGD(net.parameters(), lr=1.0, momentum=0.)
 
     # check if there are files to load the weights from
-    checkpoint_dir = 'checkpoints_neuromorphic_1'
+    checkpoint_dir = 'checkpoints_neuromorphic_2'
     latest_checkpoint_path = get_latest_checkpoint(checkpoint_dir)
     if latest_checkpoint_path:
         # Load the checkpoint if found
@@ -329,7 +329,7 @@ def main():
         training_layer = 1
 
     training = [[[0, s1_training_epochs, s1_training_iterations], 1], [[0, s2_training_epochs, s2_training_iterations], 2],
-                [[0, 680, s2_training_iterations], 3]]
+                [[0, 680, -1], 3]]
 
 
     training = training[training_layer-1:]
@@ -341,7 +341,7 @@ def main():
 
     # Initialize TensorBoard writer
     writer = SummaryWriter(
-        'runs/experiment_2')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
+        'runs/experiment_3')  # [TODO] make this unique for each run? Or keep the same for continuing training at the same step
 
 
 
@@ -364,8 +364,7 @@ def main():
                 # train for only the specified number of samples (plus what is needed to fill a batch)
                 # - this is more accurate than going by just epochs
                 # check this here to break out of the epoch loop and start straining the next layer
-                # sample_counter += batch_size
-                if sample_counter >= samples_to_train:
+                if sample_counter >= samples_to_train and samples_to_train > 0:
                     break
 
                 for batch, (frame, label) in enumerate(train_loader):
@@ -466,7 +465,7 @@ def main():
                     # train for only the specified number of samples (plus what is needed to fill a batch)
                     # - this is more accurate than going by just epochs
                     sample_counter += batch_size
-                    if sample_counter >= samples_to_train:
+                    if sample_counter >= samples_to_train and samples_to_train > 0:
                         break
 
 
