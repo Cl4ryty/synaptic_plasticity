@@ -5,7 +5,7 @@ from plasticity import STDP
 from spikingjelly.activation_based import layer
 
 class Network(nn.Module):
-    def __init__(self, number_of_classes=None):
+    def __init__(self, input_channels=6, number_of_classes=None):
         """
         Initialize the spiking neural network with convolutional layers and STDP plasticity.
 
@@ -19,7 +19,7 @@ class Network(nn.Module):
         self.class_labels = None # Initializing Labels
 
         # First convolutional layer: 6 input channels, 30 output channels, 5x5 kernel size
-        self.conv1 = layer.Conv2d(in_channels=6, out_channels=30, kernel_size=5)
+        self.conv1 = layer.Conv2d(in_channels=input_channels, out_channels=30, kernel_size=5)
         self.neuron1_thr = 15. # Threshold
         self.k1 = 5 # k=5 for k-Winner-take all
         self.r1 = 3 # inhibition radius for kwta
