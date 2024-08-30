@@ -89,10 +89,9 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     ax.legend(bbox_to_anchor=(1.0, 0.5), loc='center left',
                              borderaxespad=0., frameon=False)
 
-    # Set the labels and title
+    # Set the labels
     ax.set_xlabel("Epochs")
     ax.set_ylabel("Accuracy (%)")
-    plt.title('Training and Testing Accuracies')
     plt.tight_layout()
 
     # Save the plot with the specified name if one was passed
