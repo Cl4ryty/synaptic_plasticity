@@ -69,8 +69,8 @@ def get_k_winners(potentials: torch.Tensor, spikes: torch.Tensor,
             # Convert the flat indices to (C, h, w) coordinates
             c_index = (top_index // (h * w)).long()  # Channel index
             rem_index = top_index % (h * w)          # Remaining indices after channel removal
-            y_index = (rem_index // w).long()         # Row index
-            x_index = (rem_index % w).long()          # Column index
+            y_index = (rem_index // w).long()        # Row index
+            x_index = (rem_index % w).long()         # Column index
 
             # Stack the indices to get output shape (N, kwta, 3)
             winners.append(torch.stack([c_index, y_index, x_index], dim=1))  # Shape: (N, kwta, 3)

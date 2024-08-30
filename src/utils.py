@@ -224,7 +224,9 @@ class Intensity2Latency:
     
 class S1C1Transform:
     """
-    Applies a series of transformations to an image, including tensor conversion, filtering, and temporal transformation.
+    Applies a series of transformations to an image to encode it into the spiking domain.
+    This includes filtering the image with the provided filter, local normalization,
+    and intensity-to-latency encoding to transform it into the temporal spiking domain.
 
     Attribution:
     This class is adapted from the SpykeTorch framework. The original implementation can be found in the [SpykeTorch repository](https://github.com/miladmozafari/SpykeTorch/blob/master/MozafariDeep.py).
@@ -232,7 +234,7 @@ class S1C1Transform:
 
     Args:
         filter (callable): A function or callable object that takes a tensor image as input and returns a filtered tensor.
-        timesteps (int, optional): Number of timesteps for the temporal transformation. Default is 15.
+        timesteps (int, optional): Number of timesteps for the intensity-to-latency temporal transformation. Default is 15.
     """
     def __init__(self, filter, timesteps = 15):
         self.to_tensor = transforms.ToTensor()
@@ -288,7 +290,6 @@ def save_checkpoint(model, epoch, training_layer, directory='checkpoints'):
         training_layer (int): An integer indicating the index of the layer that is currently being trained.
         directory (str, optional): The directory where the checkpoint file will be saved. Default is 'checkpoints'.
     """
-    print("epoch", epoch, "tl", training_layer)
     if not os.path.exists(directory):
         os.makedirs(directory)
 

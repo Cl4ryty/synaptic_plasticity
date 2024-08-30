@@ -12,9 +12,18 @@ s1_training_iterations = 100000
 s2_training_iterations = 200000
 s3_training_iterations = 40000000
 valuation_after_iterations = 60000
+tensorboard_directory = 'runs/experiment_2'  # Important: Increment the number for a new experiment
 
 def main():
-    
+    """
+    This runs the main part of the experiment, which is training the reimplemented
+    network using STDP and R-STDP to perform digit classification on the MNIST dataset,
+    testing the performance of the network on the test set and logging the
+    results for visualization and analysis.
+    """
+
+    # definition of the difference of gaussian kernels
+    # values are taken from the Mozafari et al. (2019) paper
     kernels = [ 
         utils.DoGKernel(3,3/9,6/9),
         utils.DoGKernel(3,6/9,3/9),
@@ -23,10 +32,15 @@ def main():
         utils.DoGKernel(13,13/9,26/9),
         utils.DoGKernel(13,26/9,13/9)
         ]
-    
+
+    # initialization of the transform used to encode input images into the spike domain
+    # the filter consisting of six difference of gaussian filters is passed so that the
+    # encoded consists of filtering the image with the DoG filters, local normalization,
+    # and intensity-to-latency encoding
     filter = utils.Filter(kernels, padding = 6, thresholds = 30)
     s1c1 = utils.S1C1Transform(filter)   
 
+    # load the training and testing datasets, already applying the transform, catching the result, and batching
     data_root = "data"
     train_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=True, download=True, transform = s1c1))
     test_dataset = utils.CacheDataset(torchvision.datasets.MNIST(root=data_root, train=False, download=True, transform = s1c1))
@@ -56,7 +70,7 @@ def main():
     s1_training_epochs = s1_training_iterations // num_train_examples
     s2_training_epochs = s2_training_iterations // num_train_examples
     s3_training_epochs = s3_training_iterations // num_train_examples
-    valuation_after_epochs = valuation_after_iterations // num_train_examples
+    evaluation_after_epochs = valuation_after_iterations // num_train_examples
 
     # Initial adaptive learning rates
     apr = net.stdp3.learning_rate[0][0].item()
@@ -92,15 +106,14 @@ def main():
 
 
     training = training[training_layer-1:]
-    print("training", training, training_layer)
     if start_epoch != 0:
         training[0][0][
             0] = start_epoch
-        print("training changed start", training, training_layer)
+        print(f"resuming training of layer: {training_layer}, complete training configuration: {training}")
 
     # Initialize TensorBoard writer
-    writer = SummaryWriter(
-        'runs/experiment_2')  # Important: Increment the number for a new experiment 
+    writer = SummaryWriter(tensorboard_directory)
+
 
     for [start_epoch, end_epoch, samples_to_train], training_layer in training:
         sample_counter = 0
@@ -116,13 +129,11 @@ def main():
             for epoch in range(start_epoch, end_epoch+1):
                 print(f"starting epoch: {epoch}, training_layer: {training_layer}")
                 
-                # train
-                perf = torch.tensor([0,0,0]) # correct, wrong, silence
+                # Train
 
-                # train for only the specified number of samples (plus what is needed to fill a batch)
+                # Train for only the specified number of samples (plus what is needed to fill a batch)
                 # - this is more accurate than going by just epochs
-                # check this here to break out of the epoch loop and start training the next layer
-                sample_counter += batch_size
+                # Check this here to break out of the epoch loop and start training the next layer
                 # if sample_counter >= samples_to_train:
                 #     break
 
@@ -130,19 +141,19 @@ def main():
                     print(f" batch {batch}")
                     frame = frame.float()
                     frame = frame.to('cpu:0')
+                    # Swap batch and timestep dimensions, timesteps should be first
                     frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
 
                     # Forward pass through the network layers
                     c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
 
-                    if training_layer == 3:
-                        decisions = net.get_decision()
-                        rewards = torch.ones_like(decisions)  # Rewards are 1 if decision and label match
-                        rewards[decisions!=label] = -1  # Otherwise -1
+                    # Layers are trained separately, so weights are updated accordingly
+                    # for a layer only if that layer is currently being trained
 
                     if training_layer == 1:
-                        # Update weights according to STDP
+                        # Update weights for layer 1 according to STDP
                         net.stdp1(frame, n1_out, potential1, kwta=5, inhibition_radius=3)
+                        # Scale the learning rate after each 500 iterations
                         if batch!=0 and batch % scale_learning_rate_after_batches == 0:
                             ap = torch.tensor(net.stdp1.learning_rate[0][0].item(), device=net.stdp1.learning_rate[0][0].device) * 2
                             ap = torch.min(ap, torch.tensor([0.15]))
@@ -150,8 +161,9 @@ def main():
                             net.stdp1.update_all_learning_rate(ap.item(), an.item())
         
                     if training_layer == 2:
-                        # Update weights according to STDP
+                        # Update weights for layer 2 according to STDP
                         net.stdp2(pad1_out, n2_out, potential2, kwta=8, inhibition_radius=2)
+                        # Scale the learning rate after each 500 iterations
                         if batch!=0 and batch % scale_learning_rate_after_batches == 0:
                             ap = torch.tensor(net.stdp2.learning_rate[0][0].item(), device=net.stdp2.learning_rate[0][0].device) * 2
                             ap = torch.min(ap, torch.tensor([0.15]))
@@ -159,6 +171,11 @@ def main():
                             net.stdp2.update_all_learning_rate(ap.item(), an.item())
         
                     if training_layer == 3:
+                        # Get the network decision and calculate rewards
+                        decisions = net.get_decision()
+                        rewards = torch.ones_like(decisions)  # Rewards are 1 if decision and label match
+                        rewards[decisions!=label] = -1  # Otherwise -1
+
                         # Update weights according to STDP and anti-STDP
                         # STDP potentiates weights when the pre-synaptic neuron fires before the post-synaptic neuron
                         # anti-STDP potentiates weights when the post-synaptic neuron fires before the pre-synaptic neuron
@@ -173,7 +190,7 @@ def main():
                         # Get hits and misses for this batch
                         batch_hits = torch.sum(rewards == 1)
                         batch_misses = torch.sum(rewards == -1)
-                        print("hits ", batch_hits, "miss ", batch_misses)
+                        print(f"hits: {batch_hits}, misses: {batch_misses}")
 
                         # Update adaptive learning rates
                         apr_adapt = apr * (batch_misses/batch_size * adaptive_int + adaptive_min)
@@ -183,6 +200,8 @@ def main():
                         net.stdp3.update_all_learning_rate(apr_adapt, anr_adapt)
                         net.anti_stdp3.update_all_learning_rate(anp_adapt, app_adapt)
 
+                        # Get the number of correct decisions, no spikes/decisions,
+                        # and incorrect decisions and add them to the running values
                         number_correct = torch.sum(decisions == label)
                         number_no_spike = torch.sum(decisions == -1)
                         number_incorrect = decisions.__len__() - number_correct - number_no_spike
@@ -191,7 +210,8 @@ def main():
                         running_no_spikes += number_no_spike
                         batch_count += 1
 
-                    optimizer.step() # Update the model parameters 
+                    # Update the model parameters
+                    optimizer.step()
 
                     # Clamp the weights of the convolutional layers within specified ranges
                     net.conv1.weight.data.clamp_(0, 1)
@@ -218,6 +238,7 @@ def main():
 
                 # Save the training accuracies
                 if training_layer == 3:
+                    # Calculate averages of correct, no spike, and incorrect decisions
                     correct = running_correct / batch_count
                     incorrect = running_incorrect / batch_count
                     no_spikes = running_no_spikes / batch_count
@@ -225,6 +246,8 @@ def main():
                     print("Training epoch", epoch, "correct", correct / total,
                         "incorrect", incorrect / total, "no_spikes",
                         no_spikes / total)
+
+                    print(f"Training epoch: {epoch}, correct: {correct / total}, incorrect: {incorrect / total}, no spikes {no_spikes / total}")
 
                     # Log the results to TensorBoard
                     writer.add_scalar('Training correct percentage',
@@ -236,7 +259,10 @@ def main():
 
 
                 # Test
-                if training_layer == 3 and epoch % valuation_after_epochs == 0:
+                # Only test when training layer three as training is iterative and
+                # testing therefore does not make sense when training the first two
+                # layers if the other ones have not been trained yet
+                if training_layer == 3 and epoch % evaluation_after_epochs == 0:
                     running_correct = 0
                     running_incorrect = 0
                     running_no_spikes = 0
@@ -250,7 +276,6 @@ def main():
                         
                         # Forward pass through the network layers for validation
                         c1_out, n1_out, p1_out, pad1_out, potential1, c2_out, n2_out, p2_out, pad2_out, potential2, c3_out, n3_out, potential3 = net(frame)
-
                         decisions = net.get_decision()
 
                         # Calculate and accumulate the performance metrics for the validation batch

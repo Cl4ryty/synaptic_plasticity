@@ -8,13 +8,17 @@ class SingleSpikeIFNode(neuron.BaseNode):
                  surrogate_function: Callable = surrogate.Sigmoid(),
                  step_mode ='s'):
         """
-        A modified Integrate-and-Fire (IF) neuron model without membrane potential reset. 
-        This neuron can emit at most one spike during an input presentation.
+        A modified Integrate-and-Fire (IF) neuron model without membrane potential reset.
+        This neuron continuously integrates input current into its potential,
+        emitting only one spike once its threshold is reached and not spiking
+        again until it is completely reset for the next input presentation while
+        still integrating input into the potential.
+        Thus, it can emit at most one spike during an input presentation.
 
         Args:
             threshold (float): The threshold potential for spiking.
             surrogate_function (callable): The surrogate gradient function for backpropagation.
-            step_mode (str): The mode of operation (e.g., 's' for single-step mode).
+            step_mode (str): The mode of operation, 's' for single-step mode or 'm' for multi-step mode.
         """
         super().__init__(v_threshold=v_threshold, surrogate_function=surrogate_function, step_mode=step_mode)
         self.spiked = None
@@ -28,6 +32,7 @@ class SingleSpikeIFNode(neuron.BaseNode):
             x (torch.Tensor): Input current to be integrated.
         """
         # Initialize self.spiked to monitor neurons that have spiked
+        # Initialization happens here because the shape depends on the input shape
         if self.spiked == None: 
             self.spiked = torch.zeros_like(self.v)
 
@@ -56,7 +61,9 @@ class SingleSpikeIFNode(neuron.BaseNode):
     @torch.jit.script
     def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         """
-        Perform a hard reset of the membrane potential (currently no reset implemented).
+        Do not perform a hard reset of the membrane potential.
+        This function is called automatically to perform a hard reset of the
+        potential and is overwritten to not reset it for this neuron model.
 
         Args:
             v (torch.Tensor): The current membrane potential.
@@ -72,7 +79,9 @@ class SingleSpikeIFNode(neuron.BaseNode):
     @torch.jit.script
     def jit_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
         """
-        Perform a soft reset of the membrane potential (currently no reset implemented).
+        Do not perform a soft reset of the membrane potential.
+        This function is called automatically to perform a soft reset of the
+        potential and is overwritten to not reset it for this neuron model.
 
         Args:
             v (torch.Tensor): The current membrane potential.
