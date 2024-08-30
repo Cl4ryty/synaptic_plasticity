@@ -8,25 +8,31 @@ This is our project for the **Modelling of Synaptic Plasticity** course at the U
 
 **1. Open a terminal and clone this repository:** <br>
 ```
-$ git clone https://github.com/Cl4ryty/synaptic_plasticity.git 
-$ cd synaptic_plasticity
+git clone https://github.com/Cl4ryty/synaptic_plasticity.git 
+cd synaptic_plasticity
 ```
 
 **2. Create a virtual environment (optional but recommended):** <br>
 We use conda to create the virtual environment. To install conda you can follow the official [documentation](https://conda.io/projects/conda/en/latest/user-guide/install/index.html). 
 ```
-$ conda create -n synaptic_plasticity python=3.9
-$ conda activate synaptic_plasticity 
+conda create -n synaptic_plasticity python=3.9
+conda activate synaptic_plasticity 
 ```
 
 **3. Install the required dependencies:**
 ```
-$ pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Running the Project
 
 TODO: Separate training and testing into two distinct functions, so we can also just test the network
+
+### Viewing the logged results with TensorBoard
+During training of our different model configurations some metrics were logged using [TensorBoard](https://www.tensorflow.org/tensorboard/get_started). The log files are located in the ```runs``` directory and can be opened with TensorBoard by starting it with the path of the log files to display provided as `--logdir` argument. For example, to display the logged metrics for the model trained on MNIST run the following command 
+```
+tensorboard --logdir runs/experiment_1
+```  
 
 ## Project Structure and File Descriptions
 
@@ -40,6 +46,7 @@ synaptic_plasticity
     │   network.py
     │   neuron.py
     │   plasticity.py
+    │   plotting.py
     │   utils.py
 ```
 
@@ -47,8 +54,21 @@ synaptic_plasticity
 - ```src/network.py``` specifies the network architecture.
 - ```src/neuron.py``` specifies the dynamics of the Integrate-and-Fire (IF) neuron model.
 - ```src/plasticity.py``` contains the implementation of the learning algorithm - the STDP as described by [Mozafari et al.](https://www.sciencedirect.com/science/article/abs/pii/S0031320319301906) - as well the function to select the k winners eligible for plasticity.
+- ```src/plotting.py``` contains functions for plotting the logged accuracies.
 > [!IMPORTANT]
 > Many classes and functions in `src/utils.py` have been adapted from the [SpykeTorch framework](https://github.com/miladmozafari/SpykeTorch/blob/master/SpykeTorch/utils.py) to maintain consistency in input data encoding. <br>
 > **Modifications**: If any adaptations or modifications have been made, these are documented in the respective docstrings of the classes or functions. Each docstring indicates whether the code was copied or modified and provides details about any changes made.
 
-- ```src/utils.py``` contains functions for encoding the MNIST images into spike trains, and functions to load and save model checkpoints. 
+- ```src/utils.py``` contains functions for encoding the MNIST images into spike trains, and functions to load and save model checkpointLogs
+- ```runs``` contains the tensorboard log files for the different experiment runs
+    - ```runs/experiment_1``` contains the log files for the run of the reimplement model trained on MNIST
+    - ```runs/experiment_2``` contains the log files for the run of the reimplement model trained on N-MNIST
+    - ```runs/experiment_3``` contains the log files for the run of the SpykeTorch model - this is used as a benchmark for comparison
+- ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
+    - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
+    - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on MNIST
+
+[TODO] add folder for report, including figures/plots
+
+## License
+[TODO] - probably needs to be the same as SpykeTorch has
