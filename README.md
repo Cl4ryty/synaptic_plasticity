@@ -67,3 +67,8 @@ synaptic_plasticity
 - ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
     - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
     - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on MNIST
+
+[TODO] add folder for report, including figures/plots
+
+## License
+[TODO] - probably needs to be the same as SpykeTorch has
