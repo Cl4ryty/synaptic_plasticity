@@ -64,16 +64,24 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
                     if "events.out.tfevents" in file:
                         log_file = os.path.join(root, file)
                         epochs, values = extract_scalar_data(log_file, tag)
-                        print(epochs, values)
                         epoch_list += epochs
                         value_list += values
-
+                if epoch_list.__len__() == 0:
+                    tag_alternative = "Testing correct percentage"
+                    for file in files:
+                        if "events.out.tfevents" in file:
+                            log_file = os.path.join(root, file)
+                            epochs, values = extract_scalar_data(log_file, tag_alternative)
+                            epoch_list += epochs
+                            value_list += values
+                    
+                
                 epochs = np.asarray(epoch_list)
                 values = np.asarray(value_list)
                 # Sort by epoch - necessary because files may not be read in the correct order
                 sorted_indices = np.argsort(epochs)
 
-                ax.plot(epochs[sorted_indices], values[sorted_indices]*100, label=f"{label_mapping[model_dir]} - {label_mapping[tag]}", color=color_mapping[model_dir][tag], linewidth=2)
+                ax.plot(epochs[sorted_indices][:number_of_epochs+1], values[sorted_indices][:number_of_epochs+1]*100, label=f"{label_mapping[model_dir]} - {label_mapping[tag]}", color=color_mapping[model_dir][tag], linewidth=2)
 
     # Hide the all but the bottom spines (axis lines)
     ax.spines["right"].set_visible(False)
