@@ -180,6 +180,5 @@ data/MNIST/raw/train-images-idx3-ubyte
 data/MNIST/raw/train-images-idx3-ubyte.gz
 data/MNIST/raw/train-labels-idx1-ubyte
 data/MNIST/raw/train-labels-idx1-ubyte.gz
-checkpoints/*
 testing_notebook.ipynb
 .DS_Store
