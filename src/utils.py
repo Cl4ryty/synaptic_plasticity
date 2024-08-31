@@ -1,10 +1,14 @@
 import torch
 import torch.nn.functional as fn
+from torch.utils.data import DataLoader
+import torchvision
 from torchvision import transforms
 import numpy as np
 import math
 import os
 import datetime
+import tonic
+from tonic import MemoryCachedDataset
 
 class FilterKernel:
     r"""
@@ -358,3 +362,92 @@ def get_latest_checkpoint(directory):
     latest_checkpoint = checkpoint_files[-1] 
     print(f"Latest checkpoint found: {latest_checkpoint}")
     return os.path.join(directory, latest_checkpoint)
+
+def load_MNIST(batch_size=1):
+    """
+    Load and preprocess the MNIST dataset with a custom transformation.
+
+    This function loads the MNIST dataset, applies a custom spike encoding transformation using Difference of Gaussian (DoG) kernels,
+    and returns DataLoader instances for both training and testing datasets.
+
+    Args:
+        batch_size (int): The number of samples per batch. Defaults to 1.
+
+    Returns:
+        tuple: A tuple containing two DataLoader instances:
+            - train_loader: DataLoader for the training dataset.
+            - test_loader: DataLoader for the testing dataset.
+    """
+    # definition of the difference of gaussian kernels
+    # values are taken from the Mozafari et al. (2019) paper
+    kernels = [DoGKernel(3, 3 / 9, 6 / 9),
+            DoGKernel(3, 6 / 9, 3 / 9), DoGKernel(7, 7 / 9, 14 / 9),
+            DoGKernel(7, 14 / 9, 7 / 9),
+            DoGKernel(13, 13 / 9, 26 / 9),
+            DoGKernel(13, 26 / 9, 13 / 9)]
+
+    # initialization of the transform used to encode input images into the spike domain
+    # the filter consisting of six difference of gaussian filters is passed so that the
+    # encoded consists of filtering the image with the DoG filters, local normalization,
+    # and intensity-to-latency encoding
+    filter = Filter(kernels, padding=6, thresholds=50)
+    s1c1 = S1C1Transform(filter)
+
+    # load the training and testing datasets, already applying the transform, catching the result, and batching
+    data_root = "data"
+    train_dataset = CacheDataset(
+        torchvision.datasets.MNIST(root=data_root, train=True, download=True,
+                                   transform=s1c1))
+    test_dataset = CacheDataset(
+        torchvision.datasets.MNIST(root=data_root, train=False, download=True,
+                                   transform=s1c1))
+    train_loader = torch.utils.data.DataLoader(train_dataset,
+                                               batch_size=batch_size,
+                                               shuffle=False)
+    test_loader = torch.utils.data.DataLoader(test_dataset,
+                                              batch_size=batch_size,
+                                              shuffle=False)
+
+    return train_loader, test_loader
+
+def load_NMNIST(batch_size=1):
+    """
+    Load and preprocess the N-MNIST dataset with event-based frame transformation.
+
+    This function loads the N-MNIST dataset, applies a series of event-based transformations including denoising,
+    setting a high refractory period, and converting events to frames. It returns DataLoader instances for both training and testing datasets.
+
+    Args:
+        batch_size (int): The number of samples per batch. Defaults to 1.
+
+    Returns:
+        tuple: A tuple containing two DataLoader instances:
+            - train_loader: DataLoader for the training dataset.
+            - test_loader: DataLoader for the testing dataset.
+    """
+    sensor_size = tonic.datasets.NMNIST.sensor_size
+    frame_transform = tonic.transforms.Compose(
+            [tonic.transforms.Denoise(filter_time=10000),
+             tonic.transforms.RefractoryPeriod(delta=20000000), # set really high refractory period to get only one event per pixel
+             tonic.transforms.ToFrame(sensor_size=sensor_size, time_window=20000 # microseconds, this results in ~15 frames per sample, matching the 15 time steps for the encoded MNIST
+                                      )])
+
+    NMNIST_train = tonic.datasets.NMNIST(save_to="../../tutorials/data",
+                                        train=True, transform=frame_transform)
+
+    NMNIST_test = tonic.datasets.NMNIST(save_to="../../tutorials/data",
+                                       train=False, transform=frame_transform)
+
+    # cache in memory for faster loading
+    cached_NMNIST_train = MemoryCachedDataset(NMNIST_train)
+    cached_NMNIST_test = MemoryCachedDataset(NMNIST_test)
+
+    # use padding to ensure that all samples in a batch have the same length
+    train_loader = DataLoader(cached_NMNIST_train, batch_size=batch_size,
+                              shuffle=True, num_workers=12,
+                              collate_fn=tonic.collation.PadTensors())
+    test_loader = DataLoader(cached_NMNIST_test, batch_size=batch_size,
+                             shuffle=True, num_workers=12,
+                             collate_fn=tonic.collation.PadTensors())
+
+    return train_loader, test_loader

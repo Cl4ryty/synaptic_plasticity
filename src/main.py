@@ -1,8 +1,4 @@
-import tonic
 import torch
-import torchvision
-from tonic import MemoryCachedDataset
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from spikingjelly.activation_based import functional
 from network import Network
@@ -19,69 +15,6 @@ tensorboard_directory = 'runs/experiment_2'  # Important: Increment the number f
 checkpoint_dir = 'checkpoints'
 run_neuromorphic = False
 
-def load_MNIST():
-    # definition of the difference of gaussian kernels
-    # values are taken from the Mozafari et al. (2019) paper
-    kernels = [utils.DoGKernel(3, 3 / 9, 6 / 9),
-            utils.DoGKernel(3, 6 / 9, 3 / 9), utils.DoGKernel(7, 7 / 9, 14 / 9),
-            utils.DoGKernel(7, 14 / 9, 7 / 9),
-            utils.DoGKernel(13, 13 / 9, 26 / 9),
-            utils.DoGKernel(13, 26 / 9, 13 / 9)]
-
-    # initialization of the transform used to encode input images into the spike domain
-    # the filter consisting of six difference of gaussian filters is passed so that the
-    # encoded consists of filtering the image with the DoG filters, local normalization,
-    # and intensity-to-latency encoding
-    filter = utils.Filter(kernels, padding=6, thresholds=30)
-    s1c1 = utils.S1C1Transform(filter)
-
-    # load the training and testing datasets, already applying the transform, catching the result, and batching
-    data_root = "data"
-    train_dataset = utils.CacheDataset(
-        torchvision.datasets.MNIST(root=data_root, train=True, download=True,
-                                   transform=s1c1))
-    test_dataset = utils.CacheDataset(
-        torchvision.datasets.MNIST(root=data_root, train=False, download=True,
-                                   transform=s1c1))
-    train_loader = torch.utils.data.DataLoader(train_dataset,
-                                               batch_size=batch_size,
-                                               shuffle=False)
-    test_loader = torch.utils.data.DataLoader(test_dataset,
-                                              batch_size=batch_size,
-                                              shuffle=False)
-
-    return train_loader, test_loader
-
-def load_NMNIST():
-    # load NMNIST
-    sensor_size = tonic.datasets.NMNIST.sensor_size
-    frame_transform = tonic.transforms.Compose(
-            [tonic.transforms.Denoise(filter_time=10000),
-             tonic.transforms.RefractoryPeriod(delta=20000000), # set really high refractory period to get only one event per pixel
-             tonic.transforms.ToFrame(sensor_size=sensor_size, time_window=20000 # microseconds, this results in ~15 frames per sample, matching the 15 time steps for the encoded MNIST
-                                      )])
-
-    NMNIST_train = tonic.datasets.NMNIST(save_to="../../tutorials/data",
-                                        train=True, transform=frame_transform)
-
-    NMNIST_test = tonic.datasets.NMNIST(save_to="../../tutorials/data",
-                                       train=False, transform=frame_transform)
-
-    # cache in memory for faster loading
-    cached_NMNIST_train = MemoryCachedDataset(NMNIST_train)
-    cached_NMNIST_test = MemoryCachedDataset(NMNIST_test)
-
-    # use padding to ensure that all samples in a batch have the same length
-    train_loader = DataLoader(cached_NMNIST_train, batch_size=batch_size,
-                              shuffle=True, num_workers=12,
-                              collate_fn=tonic.collation.PadTensors())
-    test_loader = DataLoader(cached_NMNIST_test, batch_size=batch_size,
-                             shuffle=True, num_workers=12,
-                             collate_fn=tonic.collation.PadTensors())
-
-    return train_loader, test_loader
-
-
 def main():
     """
     This runs the main part of the experiment, which is training the reimplemented
@@ -94,10 +27,10 @@ def main():
 
     # Load the datasets and initialize the neural network
     if run_neuromorphic:
-        train_loader, test_loader = load_NMNIST()
+        train_loader, test_loader = utils.load_NMNIST(batch_size=batch_size)
         net = Network(input_channels=2, number_of_classes=10)
     else:
-        train_loader, test_loader = load_MNIST()
+        train_loader, test_loader = utils.load_MNIST(batch_size=batch_size)
         net = Network(input_channels=6, number_of_classes=10)
 
     # Use multistep mode for faster training
@@ -111,7 +44,7 @@ def main():
     batch_hits = 0
     batch_misses = 0
     # Training dataset length
-    num_train_examples = len(train_dataset)
+    num_train_examples = len(train_loader.dataset)
 
     # Frequency of scaling the learning rate
     scale_learning_rate_after_batches = 500 // batch_size
