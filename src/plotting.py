@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 def extract_scalar_data(log_path, scalar_tag):
@@ -38,7 +39,7 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     :param number_of_epochs: int value specifying the number of epochs to plot, epochs will be plotted from 0 to this number.
     :param save_as (optional): string specifying the path/filename under which the plot should be saved.
     """
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(13, 5))
 
     # Control font sizes - this is to be able to choose appropriate font sizes for larger figures
     SIZE_DEFAULT = 14
@@ -52,7 +53,7 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     plt.rc("ytick", labelsize=SIZE_DEFAULT)
 
     # Plot the baseline
-    ax.plot([0, number_of_epochs], [baseline*100, baseline*100], label="Baseline",
+    ax.plot([0, number_of_epochs], [baseline*100, baseline*100], label=label_mapping["baseline"],
             color="lightgray", linestyle="--", linewidth=1, )
 
     for model_dir in model_dirs:
@@ -93,6 +94,9 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     ax.xaxis.set_ticks_position("bottom")
     ax.spines["bottom"].set_bounds(0, number_of_epochs)
 
+    # make sure to only have integer ticks by setting the possible steps accordingly
+    ax.xaxis.set_major_locator(MaxNLocator(nbins = 'auto', steps = [1, 2, 5, 10]))
+
     # Put legend centered next to the plot to the right side, and remove the box around it
     ax.legend(bbox_to_anchor=(1.0, 0.5), loc='center left',
                              borderaxespad=0., frameon=False)
@@ -131,9 +135,14 @@ def create_final_plot():
                                   'Valuation correct percentage': "#E0B765"}, }
 
     # Mopping of paths and tag names to label to use in plot legend
-    label_mapping = {"runs/experiment_1": "1", "runs/experiment_2": "2",
-            "runs/experiment_3": "3", 'Training correct percentage': "training",
-            'Valuation correct percentage': "testing"}
+    label_mapping = {
+            "runs/experiment_1": "Ours trained on MNIST",
+            "runs/experiment_2": "Ours trained on N-MNIST",
+            "runs/experiment_3": "SpykeTorch",
+            'Training correct percentage': "training",
+            'Valuation correct percentage': "testing",
+            "baseline": "Baseline",
+    }
 
     # baseline to plot - this is the highest accuracy reported in the paper
     baseline = 0.972
@@ -143,4 +152,3 @@ def create_final_plot():
 
     plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline,
                     number_of_epochs, save_as='accuracies.png')
-

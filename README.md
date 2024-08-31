@@ -38,18 +38,36 @@ tensorboard --logdir runs/experiment_1
 
 ```
 synaptic_plasticity
-│   README.md
-│   .gitignore  
+├── .gitignore
+├── README.md
+├── requirements.txt
 │
-└───src
-    │   main.py
-    │   network.py
-    │   neuron.py
-    │   plasticity.py
-    │   plotting.py
-    │   utils.py
+├── checkpoints
+│   ├── experiment_1
+│   └── experiment_2
+│
+├── runs
+│   ├── experiment_1
+│   ├── experiment_2
+│   └── experiment_3
+│
+└── src
+    ├── main.py
+    ├── network.py
+    ├── neuron.py
+    ├── plasticity.py
+    ├── plotting.py
+    └── utils.py
+
 ```
 
+- ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
+    - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
+    - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on N-MNIST
+- ```runs``` contains the tensorboard log files for the different experiment runs
+    - ```runs/experiment_1``` contains the log files for the run of the reimplement model trained on MNIST
+    - ```runs/experiment_2``` contains the log files for the run of the reimplement model trained on N-MNIST
+    - ```runs/experiment_3``` contains the log files for the run of the SpykeTorch model - this is used as a benchmark for comparison
 - ```src/main.py``` contains the training loop to train the spiking neural network.
 - ```src/network.py``` specifies the network architecture.
 - ```src/neuron.py``` specifies the dynamics of the Integrate-and-Fire (IF) neuron model.
@@ -60,13 +78,6 @@ synaptic_plasticity
 > **Modifications**: If any adaptations or modifications have been made, these are documented in the respective docstrings of the classes or functions. Each docstring indicates whether the code was copied or modified and provides details about any changes made.
 
 - ```src/utils.py``` contains functions for encoding the MNIST images into spike trains, and functions to load and save model checkpointLogs
-- ```runs``` contains the tensorboard log files for the different experiment runs
-    - ```runs/experiment_1``` contains the log files for the run of the reimplement model trained on MNIST
-    - ```runs/experiment_2``` contains the log files for the run of the reimplement model trained on N-MNIST
-    - ```runs/experiment_3``` contains the log files for the run of the SpykeTorch model - this is used as a benchmark for comparison
-- ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
-    - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
-    - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on MNIST
 
 [TODO] add folder for report, including figures/plots
 
