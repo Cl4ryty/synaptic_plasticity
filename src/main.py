@@ -11,8 +11,8 @@ s1_training_iterations = 100000
 s2_training_iterations = 200000
 s3_training_iterations = 40000000
 valuation_after_iterations = 60000
-tensorboard_directory = 'runs/experiment_2'  # Important: Increment the number for a new experiment
-checkpoint_dir = 'checkpoints'
+tensorboard_directory = 'runs/experiment_1'  # Important: Increment the number for a new experiment
+checkpoint_dir = 'checkpoints/experiment_1'
 run_neuromorphic = False
 
 def main():
