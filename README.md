@@ -56,7 +56,7 @@ To use the N-MNIST dataset, set `run_neuromorphic` in line 16 to `True`. Set it 
 ### Using and Playing Around with the Model
 
 In the notebook `mnist_model_demo.ipynb`, we go through each step to run the model with visualizations to make the process more engaging and informative.
-Run it locally by starting `jupyter lab`, opening the notebook and running its contents there, or <a href="https://colab.research.google.com/github/Cl4ryty/synaptic_plasticity/blob/separated_data_loading/mnist_model_demo.ipynb">
+Run it locally by starting `jupyter lab`, opening the notebook and running its contents there, or <a href="https://colab.research.google.com/github/Cl4ryty/synaptic_plasticity/blob/main/mnist_model_demo.ipynb">
   <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
 </a>
 
@@ -80,6 +80,10 @@ synaptic_plasticity
 │   ├── experiment_1
 │   └── experiment_2
 │
+├── report
+│   ├── report_group7.pdf
+│   └── accuracies.png
+│
 ├── runs
 │   ├── experiment_1
 │   ├── experiment_2
@@ -99,6 +103,7 @@ synaptic_plasticity
 - ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
     - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
     - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on N-MNIST
+- ```report``` contains the PDF of the report of the project and the results plot of the model accuracies
 - ```runs``` contains the tensorboard log files for the different experiment runs
     - ```runs/experiment_1``` contains the log files for the run of the reimplement model trained on MNIST
     - ```runs/experiment_2``` contains the log files for the run of the reimplement model trained on N-MNIST
