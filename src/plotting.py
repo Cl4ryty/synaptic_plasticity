@@ -24,7 +24,7 @@ def extract_scalar_data(log_path, scalar_tag):
     else:
         return [], []
 
-def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, number_of_epochs, save_as=None):
+def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, number_of_epochs, save_as=None, print_best_accuracies=False):
     """
     Plot the baseline and the accuracies of multiple models/runs provided as
     tensorboard records in the provided directories in the specified colors,
@@ -81,6 +81,10 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
                 # Sort by epoch - necessary because files may not be read in the correct order
                 sorted_indices = np.argsort(epochs)
 
+                print(f"{label_mapping[model_dir[-1]]} - {label_mapping[tag]}, "
+                      f"best accuracy: {np.max(values[sorted_indices][:number_of_epochs + 1])*100:.2f} "
+                      f"at epoch {epochs[sorted_indices][:number_of_epochs + 1][np.argmax(values[sorted_indices][:number_of_epochs + 1])]}")
+
                 ax.plot(epochs[sorted_indices][:number_of_epochs+1], values[sorted_indices][:number_of_epochs+1]*100, label=f"{label_mapping[model_dir[-1]]} - {label_mapping[tag]}", color=color_mapping[model_dir[-1]][tag], linewidth=2)
 
     # Hide the all but the bottom spines (axis lines)
@@ -112,7 +116,7 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     plt.show()
 
 
-def create_final_plot(model_dirs=['runs/experiment_1', 'runs/experiment_2', 'runs/experiment_3']):
+def get_final_results(model_dirs=['runs/experiment_1', 'runs/experiment_2', 'runs/experiment_3']):
     """
     Wrapper function which called the plot_accuracies function with the correct
     paths and values to create our final plot for the report.
@@ -151,4 +155,5 @@ def create_final_plot(model_dirs=['runs/experiment_1', 'runs/experiment_2', 'run
     number_of_epochs = 20
 
     plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline,
-                    number_of_epochs, save_as='accuracies.png')
+                    number_of_epochs, save_as='accuracies.png',
+                    print_best_accuracies=True)
