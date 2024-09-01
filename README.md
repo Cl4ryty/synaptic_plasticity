@@ -15,7 +15,7 @@ cd synaptic_plasticity
 **2. Create a virtual environment (optional but recommended):** <br>
 We use conda to create the virtual environment. To install conda you can follow the official [documentation](https://conda.io/projects/conda/en/latest/user-guide/install/index.html). 
 ```
-conda create -n synaptic_plasticity python=3.9
+conda create -n synaptic_plasticity python=3.9 nb_conda_kernels
 conda activate synaptic_plasticity 
 ```
 
