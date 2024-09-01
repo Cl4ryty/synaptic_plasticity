@@ -118,5 +118,3 @@ synaptic_plasticity
 > **Modifications**: If any adaptations or modifications have been made, these are documented in the respective docstrings of the classes or functions. Each docstring indicates whether the code was copied or modified and provides details about any changes made.
 
 - ```src/utils.py``` contains functions for encoding the MNIST images into spike trains, and functions to load and save model checkpointLogs
-
-[TODO] add folder for report, including figures/plots
