@@ -62,6 +62,8 @@ synaptic_plasticity
 ├── .gitignore
 ├── README.md
 ├── requirements.txt
+├── mnist_model_demo.ipynb
+├── LICENSE
 │
 ├── checkpoints
 │   ├── experiment_1
@@ -82,6 +84,7 @@ synaptic_plasticity
 
 ```
 
+- ```mnist_model_demo.ipynb``` provides a demonstration of how to use the model
 - ```checkpoints``` contains the checkpoints saved during training for each of different training runs of our models
     - ```checkpoints/experiment_1``` contains the checkpoints for the model trained on MNIST
     - ```checkpoints/experiment_2``` contains the checkpoints for the model trained on N-MNIST
