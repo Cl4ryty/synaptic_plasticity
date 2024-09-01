@@ -101,6 +101,3 @@ synaptic_plasticity
 - ```src/utils.py``` contains functions for encoding the MNIST images into spike trains, and functions to load and save model checkpointLogs
 
 [TODO] add folder for report, including figures/plots
-
-## License
-[TODO] - probably needs to be the same as SpykeTorch has
