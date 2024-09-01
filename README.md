@@ -25,8 +25,29 @@ pip install -r requirements.txt
 ```
 
 ## Running the Project
+### Training the Model
 
-TODO: Separate training and testing into two distinct functions, so we can also just test the network
+To train the network, execute the `main.py` file. 
+
+When starting a new experiment, remember to increment the experiment number in line 14 to ensure that TensorBoard generates a separate plot for each experiment. For example:
+
+```python
+tensorboard_directory = 'runs/experiment_4'  # Important: Increment the number for a new experiment
+```
+<br>
+
+Ensure you select the correct checkpoints for your experiments. We provide trained models for MNIST (experiment_1) and N-MNIST (experiment_2). 
+If you want to train the model from scratch, create a new folder (e.g., `experiment_3`) in the `checkpoints` directory and update the `checkpoint_dir` in line 15 accordingly. For example:
+
+```python
+checkpoint_dir = 'checkpoints/experiment_3'
+```
+To use the N-MNIST dataset, set `run_neuromorphic` in line 16 to `True`. Set it to `False` if you wish to use the original MNIST dataset.
+
+
+### Using and Playing Around with the Model
+
+In the notebook `mnist_model_demo.ipynb`, we go through each step to run the model with visualizations to make the process more engaging and informative.
 
 ### Viewing the logged results with TensorBoard
 During training of our different model configurations some metrics were logged using [TensorBoard](https://www.tensorflow.org/tensorboard/get_started). The log files are located in the ```runs``` directory and can be opened with TensorBoard by starting it with the path of the log files to display provided as `--logdir` argument. For example, to display the logged metrics for the model trained on MNIST run the following command 
