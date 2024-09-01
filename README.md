@@ -28,19 +28,27 @@ pip install -r requirements.txt
 ### Training the Model
 
 To train the network, execute the `main.py` file. 
-
-When starting a new experiment, remember to increment the experiment number in line 14 to ensure that TensorBoard generates a separate plot for each experiment. For example:
-
-```python
-tensorboard_directory = 'runs/experiment_4'  # Important: Increment the number for a new experiment
+Some general settings and training parameters can or in some cases should be changed, which can be done either by modifying them in the `main.py` file or by passing them as command line arguments. 
+To see the available arguments run the script with the help flag:
 ```
-<br>
+python src/main.py --help
+```
 
-Ensure you select the correct checkpoints for your experiments. We provide trained models for MNIST (experiment_1) and N-MNIST (experiment_2). 
-If you want to train the model from scratch, create a new folder (e.g., `experiment_3`) in the `checkpoints` directory and update the `checkpoint_dir` in line 15 accordingly. For example:
+
+When starting a new experiment, it is important to change the `tensorboard_dir` e.g. by incrementing the experiment number to ensure that TensorBoard generates a separate plot for each experiment.
+Also ensure that you select the correct checkpoints for your experiments. We provide trained models for MNIST (experiment_1) and N-MNIST (experiment_2). 
+If you want to train the model from scratch, create a new folder (e.g., `experiment_4`) in the `checkpoints` directory and pass or update the `checkpoint_dir` parameter accordingly. For example: 
+- run the script with the arguments provided:
+
+```
+python src/main.py --tensorboard_dir="runs/experiment_4" --checkpoint_dir = "checkpoints/experiment_4"
+```
+
+- or modify the parameter values in lines 15 and 16 of the `main.py` file:
 
 ```python
-checkpoint_dir = 'checkpoints/experiment_3'
+tensorboard_dir = 'runs/experiment_4'  # Important: Increment the number for a new experiment
+checkpoint_dir = 'checkpoints/experiment_4'
 ```
 To use the N-MNIST dataset, set `run_neuromorphic` in line 16 to `True`. Set it to `False` if you wish to use the original MNIST dataset.
 
