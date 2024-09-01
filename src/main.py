@@ -1,3 +1,4 @@
+import argparse
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from spikingjelly.activation_based import functional
@@ -11,9 +12,34 @@ s1_training_iterations = 100000
 s2_training_iterations = 200000
 s3_training_iterations = 40000000
 valuation_after_iterations = 60000
-tensorboard_directory = 'runs/experiment_1'  # Important: Increment the number for a new experiment
+tensorboard_dir = 'runs/experiment_1'  # Important: Increment the number for a new experiment
 checkpoint_dir = 'checkpoints/experiment_1'
 run_neuromorphic = False
+
+
+# parsing command line arguments, previous settings are defaults and used if no arguments are passed
+parser = argparse.ArgumentParser(description='Script to running training loop to train the SNN to classify digits')
+parser.add_argument('--use_cupy', type=bool, default=use_cupy, help='Flag to use CuPy (default: True)')
+parser.add_argument('--batch_size', type=int, default=batch_size, help='Batch size for training (default: 100)')
+parser.add_argument('--s1_training_iterations', type=int, default=s1_training_iterations, help='Training iterations for layer S1 (default: 100000)')
+parser.add_argument('--s2_training_iterations', type=int, default=s2_training_iterations, help='Training iterations for layer S2 (default: 200000)')
+parser.add_argument('--s3_training_iterations', type=int, default=s3_training_iterations, help='Training iterations for layer S3 (default: 40000000)')
+parser.add_argument('--valuation_after_iterations', type=int, default=valuation_after_iterations, help='Iterations after which to perform valuation (default: 60000)')
+parser.add_argument('--tensorboard_directory', type=str, default=tensorboard_dir, help='Tensorboard directory for logging (default: runs/experiment_1)')
+parser.add_argument('--checkpoint_dir', type=str, default=checkpoint_dir, help='Directory for saving checkpoints (default: checkpoints/experiment_1)')
+parser.add_argument('--run_neuromorphic', type=bool, default=run_neuromorphic, help='Flag to train on N-MNIST instead of MNIST (default: False)')
+
+args = parser.parse_args()
+use_cupy = args.use_cupy
+batch_size = args.batch_size
+s1_training_iterations = args.s1_training_iterations
+s2_training_iterations = args.s2_training_iterations
+s3_training_iterations = args.s3_training_iterations
+valuation_after_iterations = args.valuation_after_iterations
+tensorboard_dir = args.tensorboard_directory
+checkpoint_dir = args.checkpoint_dir
+run_neuromorphic = args.run_neuromorphic
+
 
 def main():
     """
@@ -94,7 +120,7 @@ def main():
         print(f"resuming training of layer: {training_layer}, complete training configuration: {training}")
 
     # Initialize TensorBoard writer
-    writer = SummaryWriter(tensorboard_directory)
+    writer = SummaryWriter(tensorboard_dir)
 
 
     for [start_epoch, end_epoch, samples_to_train], training_layer in training:
