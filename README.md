@@ -48,6 +48,9 @@ To use the N-MNIST dataset, set `run_neuromorphic` in line 16 to `True`. Set it 
 ### Using and Playing Around with the Model
 
 In the notebook `mnist_model_demo.ipynb`, we go through each step to run the model with visualizations to make the process more engaging and informative.
+Run it locally by starting `jupyter lab`, opening the notebook and running its contents there, or <a href="https://colab.research.google.com/github/Cl4ryty/synaptic_plasticity/blob/separated_data_loading/mnist_model_demo.ipynb">
+  <img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/>
+</a>
 
 ### Viewing the logged results with TensorBoard
 During training of our different model configurations some metrics were logged using [TensorBoard](https://www.tensorflow.org/tensorboard/get_started). The log files are located in the ```runs``` directory and can be opened with TensorBoard by starting it with the path of the log files to display provided as `--logdir` argument. For example, to display the logged metrics for the model trained on MNIST run the following command 
