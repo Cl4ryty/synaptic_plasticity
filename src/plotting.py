@@ -22,7 +22,6 @@ def extract_scalar_data(log_path, scalar_tag):
         values = [event.value for event in scalar_events]
         return epochs, values
     else:
-        print(f"Tag {scalar_tag} not found in logs.")
         return [], []
 
 def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, number_of_epochs, save_as=None):
@@ -82,7 +81,7 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
                 # Sort by epoch - necessary because files may not be read in the correct order
                 sorted_indices = np.argsort(epochs)
 
-                ax.plot(epochs[sorted_indices][:number_of_epochs+1], values[sorted_indices][:number_of_epochs+1]*100, label=f"{label_mapping[model_dir]} - {label_mapping[tag]}", color=color_mapping[model_dir][tag], linewidth=2)
+                ax.plot(epochs[sorted_indices][:number_of_epochs+1], values[sorted_indices][:number_of_epochs+1]*100, label=f"{label_mapping[model_dir[-1]]} - {label_mapping[tag]}", color=color_mapping[model_dir[-1]][tag], linewidth=2)
 
     # Hide the all but the bottom spines (axis lines)
     ax.spines["right"].set_visible(False)
@@ -113,32 +112,33 @@ def plot_accuracies(model_dirs, tags, color_mapping, label_mapping, baseline, nu
     plt.show()
 
 
-def create_final_plot():
+def create_final_plot(model_dirs=['runs/experiment_1', 'runs/experiment_2', 'runs/experiment_3']):
     """
     Wrapper function which called the plot_accuracies function with the correct
     paths and values to create our final plot for the report.
-    """
 
-    # Directory paths for the TensorBoard logs
-    model_dirs = ['runs/experiment_1', 'runs/experiment_2', 'runs/experiment_3']
+    Args:
+        model_dirs (list of str): List of directory paths where the model experiment results are stored.
+                                    Each directory should contain the relevant data for one experimental run.
+    """
 
     # Tags for training and testing accuracies
     tags = ['Training correct percentage', 'Valuation correct percentage']
 
     # Mapping of names to colors
     color_mapping = {
-            "runs/experiment_1": {'Training correct percentage': "#CE96FF",
+            "1": {'Training correct percentage': "#CE96FF",
                                   'Valuation correct percentage': "#BF55EC"},
-            "runs/experiment_2": {'Training correct percentage': "#72D5B3",
+            "2": {'Training correct percentage': "#72D5B3",
                                   'Valuation correct percentage': "#03A678"},
-            "runs/experiment_3": {'Training correct percentage': "#F9E9A8",
+            "3": {'Training correct percentage': "#F9E9A8",
                                   'Valuation correct percentage': "#E0B765"}, }
 
     # Mopping of paths and tag names to label to use in plot legend
     label_mapping = {
-            "runs/experiment_1": "Ours trained on MNIST",
-            "runs/experiment_2": "Ours trained on N-MNIST",
-            "runs/experiment_3": "SpykeTorch",
+            "1": "Ours trained on MNIST",
+            "2": "Ours trained on N-MNIST",
+            "3": "SpykeTorch",
             'Training correct percentage': "training",
             'Valuation correct percentage': "testing",
             "baseline": "Baseline",
